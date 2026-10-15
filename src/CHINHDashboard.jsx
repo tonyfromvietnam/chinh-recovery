@@ -5,198 +5,62 @@ import {
 import {
   Moon, HeartPulse, Activity, Sun, Dumbbell, Brain, Wind, ShoppingCart,
   BedDouble, Footprints, ClipboardCheck, X, Zap, Check, BookOpen, Utensils,
-  Info, Target,
+  Target, AlertOctagon, SlidersHorizontal, CheckCircle2, RefreshCw,
 } from "lucide-react";
+import { planDay, parseSyncHash, upsertDay, dateKey } from "./engine.js";
 
 /* =========================================================================
-   1. RECOVERY ENGINE  (weights from Recovery_Algorithm_and_Schedule_Logic.md)
-   Sleep 35% · HRV & RHR 35% · Soreness/Stiffness 20% · Mental Energy 10%
+   Storage (on this device only — wrapped so private mode never crashes)
    ========================================================================= */
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const KEYS = { history: "chinh-history", checkin: "chinh-checkin", done: (d) => `chinh-done-${d}`, sync: "chinh-last-sync" };
+const load = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } };
 
-export function calculateRecovery(c) {
-  // Sleep: half duration (vs 8h target), half subjective quality
-  const sleep = clamp01(c.sleepHours / 8) * 0.5 + (c.sleepQuality / 10) * 0.5;
-
-  // Autonomic: HRV vs personal baseline (60%) + RHR vs baseline (40%)
-  const hrvRatio = c.hrv / c.hrvBaseline;
-  const hrvScore = clamp01((hrvRatio - 0.7) / 0.45); // 70% of baseline → 0, 115% → 1
-  const rhrScore = clamp01((c.rhrBaseline + 7 - c.rhr) / 12); // +7 bpm over baseline → 0
-  const autonomic = hrvScore * 0.6 + rhrScore * 0.4;
-
-  // Soreness: 1 = none, 5 = severe (ankle/hips weighted higher during sprain rehab)
-  const sorenessAvg = (c.upper + c.lower + c.ankleHip * 2) / 4;
-  const soreness = clamp01((5 - sorenessAvg) / 4);
-
-  // Mental energy: 1 = drained, 5 = sharp
-  const mental = clamp01((c.energy - 1) / 4);
-
-  const parts = [
-    { key: "sleep", label: "Sleep", weight: 35, value: sleep, icon: Moon },
-    { key: "autonomic", label: "HRV & RHR", weight: 35, value: autonomic, icon: HeartPulse },
-    { key: "soreness", label: "Soreness", weight: 20, value: soreness, icon: Activity },
-    { key: "mental", label: "Mental energy", weight: 10, value: mental, icon: Brain },
-  ].map((p) => ({ ...p, points: p.value * p.weight }));
-
-  const score = Math.round(parts.reduce((s, p) => s + p.points, 0));
-  return { score, parts, hrvRatio };
-}
-
-export function getArchetype(score) {
-  if (score >= 80)
-    return { id: "high", label: "HIGH OUTPUT DAY", color: "#22e58b", tint: "rgba(34,229,139,0.12)",
-      summary: "Green light. Load heavy, go deep on focus work, chase intensity." };
-  if (score >= 50)
-    return { id: "balanced", label: "BALANCED FLOW DAY", color: "#facc15", tint: "rgba(250,204,21,0.12)",
-      summary: "Train with intent, not ego. Technique-first volume and structured work." };
-  return { id: "restore", label: "ACTIVE RESTORATION DAY", color: "#fb5a6e", tint: "rgba(251,90,110,0.12)",
-    summary: "Your system is asking for parasympathetic time. Recover hard today." };
-}
-
-/* =========================================================================
-   2. SCHEDULE GENERATOR
-   ========================================================================= */
-const TYPE_META = {
-  sun: { icon: Sun, color: "#fbbf24", label: "Morning" },
-  mobility: { icon: Footprints, color: "#22d3ee", label: "Mobility" },
-  focus: { icon: Brain, color: "#a78bfa", label: "Deep work" },
-  work: { icon: ClipboardCheck, color: "#94a3b8", label: "Work" },
-  breath: { icon: Wind, color: "#5eead4", label: "Breathwork" },
-  training: { icon: Dumbbell, color: "#22e58b", label: "Training" },
-  errands: { icon: ShoppingCart, color: "#f97316", label: "Errands" },
-  fuel: { icon: Utensils, color: "#fda4af", label: "Fuel" },
-  study: { icon: BookOpen, color: "#a78bfa", label: "Study" },
-  wind: { icon: BedDouble, color: "#818cf8", label: "Wind-down" },
-};
-
-export function generateSchedule(archetypeId, c) {
-  const ankleFlag = c.ankleHip >= 4;
-  const lowerFlag = c.lower >= 4;
-
-  const plans = {
-    high: [
-      ["07:00", 15, "sun", "Morning sun & 500 ml water", "10 min outside before screens. Add electrolytes."],
-      ["07:30", 10, "mobility", "Dynamic warm-up + ankle primer", "Knee-to-Wall Pulses, Ankle CARs, World's Greatest Stretch."],
-      ["09:00", 120, "focus", "Deep focus engineering block", "Phone in another room. One problem, two hours."],
-      ["11:15", 60, "work", "CRM analysis & reporting", "Batch Slack and email at the end of the block."],
-      ["12:30", 40, "fuel", "Lunch + 10-min walk", "40 g protein. Walk to bank daylight."],
-      ["14:00", 10, "breath", "Box breathing 4-4-4-4", "Reset before the afternoon push."],
-      ["14:15", 120, "work", "Structured work & meetings", "Hardest stakeholder tasks first."],
-      ["17:00", 75, "training",
-        ankleFlag ? "Heavy lift (football on hold)" : "Heavy lift or football session",
-        ankleFlag
-          ? "Ankle/hip stiffness is 4+. Lift today; skip cutting and sprint work."
-          : "Top sets at RPE 8–9. Full ankle warm-up before any football."],
-      ["19:00", 45, "fuel", "Recovery dinner", "Carbs + protein within 2 h of training."],
-      ["21:30", 45, "wind", "Wind-down & screens off", "Dim lights, 10-min reading, 18 °C bedroom."],
-    ],
-    balanced: [
-      ["07:00", 15, "sun", "Morning sun & hydration", "Light exposure anchors tonight's sleep."],
-      ["07:30", 15, "mobility", "Ankle & hip mobility drills", "Full drill list in the mobility panel."],
-      ["09:00", 180, "work", "Structured work & meetings", "CRM pipeline review, then meetings."],
-      ["12:30", 30, "fuel", "Lunch + short walk", "Easy pace. Keep steps flowing."],
-      ["14:00", 15, "breath", "Breathwork & meditation", "Physiological sighs, then 10 min guided."],
-      ["14:30", 90, "study", "Deep study block", "One 90-min sprint. Stop while it's going well."],
-      ["17:30", 60, "training",
-        lowerFlag ? "Upper hypertrophy (technique focus)" : "Hypertrophy session (technique focus)",
-        lowerFlag
-          ? "Lower body is sore. Shift to upper; keep 2 reps in reserve."
-          : "Moderate load, 2–3 reps in reserve, controlled tempo."],
-      ["19:00", 45, "fuel", "Dinner & meal prep for tomorrow", "Prep tomorrow's lunch now."],
-      ["21:30", 45, "wind", "Wind-down routine", "No screens after 22:00. Lights out 22:30."],
-    ],
-    restore: [
-      ["08:00", 20, "sun", "Gentle walk & hydration", "Nasal breathing only. Zone 1 pace."],
-      ["09:00", 20, "breath", "Deep meditation & breathwork", "NSDR or 4-7-8 breathing. Lie down."],
-      ["10:30", 90, "study", "Passive study / reading", "Lectures, docs, or a book. No hard problem solving."],
-      ["12:30", 40, "fuel", "Nutrient-dense lunch", "Extra protein and colourful veg for repair."],
-      ["14:00", 90, "errands", "Grocery shopping & meal prep", "Light movement that counts. Prep 3 meals."],
-      ["16:30", 30, "mobility", "Full mobility & foam rolling", "Calves, quads, adductors, T-spine. Slow tempo."],
-      ["18:30", 45, "fuel", "Early dinner", "Finish eating 3 h before bed."],
-      ["21:00", 60, "wind", "Extended wind-down", "Warm shower, journal, lights out by 22:00."],
-    ],
-  };
-
-  return plans[archetypeId].map(([time, dur, type, title, detail], i) => ({
-    id: `${archetypeId}-${i}`, time, dur, type, title, detail,
-  }));
-}
-
-/* =========================================================================
-   3. MOBILITY ENGINE  (Mobility_and_Movement_Guide.md)
-   ========================================================================= */
-const DRILLS = [
-  { id: "k2w", name: "Knee-to-Wall Dynamic Pulses", area: "ankle", required: true,
-    dose: "10–12 reps / side", cue: "Foot 5–8 cm from wall. Heel stays down." },
-  { id: "cars", name: "Ankle CARs", area: "ankle",
-    dose: "5 reps each direction", cue: "Slow 360° circles at your end range." },
-  { id: "9090", name: "90/90 Hip Switches", area: "hip", required: true,
-    dose: "8–10 reps / side", cue: "Switch knees without using your hands." },
-  { id: "cossack", name: "Cossack Squats", area: "hip", required: true,
-    dose: "6–8 reps / side", cue: "Sit deep into one side, opposite leg long." },
-  { id: "wgs", name: "World's Greatest Stretch", area: "hip", required: true,
-    dose: "5 reps / side", cue: "Lunge, elbow to ankle, rotate to ceiling." },
-  { id: "drop", name: "Drop Squats", area: "chain", minDay: "balanced",
-    dose: "3 × 8", cue: "Drop fast through the hips. Stick the landing." },
-  { id: "slrdl", name: "Single-Leg RDL", area: "chain", minDay: "balanced",
-    dose: "3 × 8–10 / side", cue: "Hips level. Ankle grips the floor." },
-  { id: "carry", name: "Suitcase Carry", area: "chain", minDay: "high",
-    dose: "3 × 20–30 m / side", cue: "Heavy bell. Torso stays vertical." },
-];
-
-const DAY_RANK = { restore: 0, balanced: 1, high: 2 };
-
-export function buildMobility(c, archetypeId) {
-  const areaLoad = { ankle: c.ankleHip, hip: Math.max(c.ankleHip, c.lower), chain: c.lower };
-  return DRILLS
-    .filter((d) => d.required || d.area !== "chain" || DAY_RANK[archetypeId] >= DAY_RANK[d.minDay])
-    .map((d) => {
-      const load = areaLoad[d.area];
-      const priority = load >= 4 ? "High" : load >= 3 ? "Medium" : "Maintain";
-      return { ...d, priority, load };
-    })
-    .sort((a, b) => b.load - a.load || Number(!!b.required) - Number(!!a.required));
-}
-
-/* =========================================================================
-   4. DEMO DATA  (example values, replace with real check-ins)
-   ========================================================================= */
+/* Example values shown until your first check-in */
 const DEFAULT_CHECKIN = {
   sleepHours: 7.2, sleepQuality: 7, hrv: 62, hrvBaseline: 66, rhr: 55, rhrBaseline: 54,
   upper: 2, lower: 3, ankleHip: 3, energy: 4,
 };
-const DEMO_HISTORY = [
-  { day: "Fri", score: 74 }, { day: "Sat", score: 83 }, { day: "Sun", score: 46 },
-  { day: "Mon", score: 58 }, { day: "Tue", score: 81 }, { day: "Wed", score: 69 },
-];
+const EXAMPLE_TREND = [74, 83, 46, 58, 81, 69];
 
 /* =========================================================================
-   5. UI COMPONENTS
+   UI building blocks
    ========================================================================= */
-const Card = ({ className = "", children }) => (
-  <section className={`rounded-2xl border border-white/[0.07] bg-white/[0.035] backdrop-blur-xl ${className}`}>
-    {children}
-  </section>
-);
+const TYPE_META = {
+  sun: { icon: Sun, color: "#fbbf24" },
+  mobility: { icon: Footprints, color: "#22d3ee" },
+  focus: { icon: Brain, color: "#a78bfa" },
+  work: { icon: ClipboardCheck, color: "#94a3b8" },
+  breath: { icon: Wind, color: "#5eead4" },
+  training: { icon: Dumbbell, color: "#22e58b" },
+  errands: { icon: ShoppingCart, color: "#f97316" },
+  fuel: { icon: Utensils, color: "#fda4af" },
+  study: { icon: BookOpen, color: "#a78bfa" },
+  wind: { icon: BedDouble, color: "#818cf8" },
+};
+const PART_ICON = { sleep: Moon, autonomic: HeartPulse, soreness: Activity, mental: Brain };
+const LEVEL_META = {
+  stop: { icon: AlertOctagon, color: "#fb5a6e", label: "Stop" },
+  adjust: { icon: SlidersHorizontal, color: "#facc15", label: "Adjust" },
+  go: { icon: CheckCircle2, color: "#22e58b", label: "Go" },
+};
 
+const Card = ({ className = "", children }) => (
+  <section className={`rounded-2xl border border-white/[0.07] bg-white/[0.035] backdrop-blur-xl ${className}`}>{children}</section>
+);
 const Eyebrow = ({ children }) => (
   <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400">{children}</p>
 );
 
 function ScoreRing({ score, color, size = 220 }) {
-  const stroke = 14;
-  const r = (size - stroke) / 2;
-  const circ = 2 * Math.PI * r;
-  const offset = circ * (1 - score / 100);
+  const stroke = 14, r = (size - stroke) / 2, circ = 2 * Math.PI * r;
   return (
     <div className="relative shrink-0" style={{ width: size, height: size, maxWidth: "100%" }}>
       <svg viewBox={`0 0 ${size} ${size}`} className="h-full w-full -rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(148,163,184,0.12)" strokeWidth={stroke} />
-        <circle
-          cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
-          strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={offset}
-          style={{ transition: "stroke-dashoffset 900ms cubic-bezier(.2,.8,.2,1), stroke 400ms", filter: `drop-shadow(0 0 10px ${color}66)` }}
-        />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+          strokeLinecap="round" strokeDasharray={circ} strokeDashoffset={circ * (1 - score / 100)}
+          style={{ transition: "stroke-dashoffset 900ms cubic-bezier(.2,.8,.2,1), stroke 400ms", filter: `drop-shadow(0 0 10px ${color}66)` }} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="font-display text-7xl font-bold leading-none tabular-nums" style={{ color }}>{score}</span>
@@ -219,36 +83,35 @@ function MiniRing({ pct, color }) {
 
 function Checkbox({ checked, onChange, color = "#22e58b", label }) {
   return (
-    <button
-      type="button" role="checkbox" aria-checked={checked} aria-label={label} onClick={onChange}
+    <button type="button" role="checkbox" aria-checked={checked} aria-label={label} onClick={onChange}
       className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-      style={{ borderColor: checked ? color : "rgba(148,163,184,0.4)", background: checked ? color : "transparent" }}
-    >
+      style={{ borderColor: checked ? color : "rgba(148,163,184,0.4)", background: checked ? color : "transparent" }}>
       {checked && <Check size={15} strokeWidth={3.5} color="#0b1220" />}
     </button>
   );
 }
 
-function RecoveryCard({ result, archetype }) {
+/* =========================================================================
+   Panels
+   ========================================================================= */
+function RecoveryCard({ result, archetype, baselines, dateLabel }) {
   return (
     <Card className="p-5 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <Eyebrow>Recovery score</Eyebrow>
-        <span className="font-mono text-[11px] text-slate-500">Thu 15 Oct</span>
+        <span className="font-mono text-[11px] text-slate-500">{dateLabel}</span>
       </div>
       <div className="mt-4 flex flex-col items-center gap-5">
         <ScoreRing score={result.score} color={archetype.color} />
-        <div
-          className="rounded-full border px-4 py-1.5 font-display text-lg font-semibold tracking-[0.08em]"
-          style={{ color: archetype.color, borderColor: `${archetype.color}55`, background: archetype.tint }}
-        >
+        <div className="rounded-full border px-4 py-1.5 font-display text-lg font-semibold tracking-[0.08em]"
+          style={{ color: archetype.color, borderColor: `${archetype.color}55`, background: archetype.tint }}>
           {archetype.label}
         </div>
         <p className="max-w-xs text-center text-sm text-slate-300">{archetype.summary}</p>
       </div>
       <div className="mt-6 space-y-3 border-t border-white/[0.06] pt-5">
         {result.parts.map((p) => {
-          const Icon = p.icon;
+          const Icon = PART_ICON[p.key];
           return (
             <div key={p.key} className="grid grid-cols-[18px_1fr_auto] items-center gap-3">
               <Icon size={16} className="text-slate-400" />
@@ -258,36 +121,75 @@ function RecoveryCard({ result, archetype }) {
                   <span className="font-mono text-slate-500">{p.weight}%</span>
                 </div>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-700/50">
-                  <div className="h-full rounded-full transition-all duration-700"
-                    style={{ width: `${p.value * 100}%`, background: archetype.color }} />
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${p.value * 100}%`, background: archetype.color }} />
                 </div>
               </div>
-              <span className="w-12 text-right font-mono text-sm tabular-nums text-slate-200">
-                {p.points.toFixed(1)}
-              </span>
+              <span className="w-12 text-right font-mono text-sm tabular-nums text-slate-200">{p.points.toFixed(1)}</span>
             </div>
           );
         })}
       </div>
+      <p className="mt-4 font-mono text-[11px] text-slate-500">
+        {baselines.source === "rolling"
+          ? `Baseline: your last ${baselines.days} days (30-day rolling)`
+          : `Baseline: manual · ${baselines.daysNeeded} more check-in${baselines.daysNeeded === 1 ? "" : "s"} until it learns yours`}
+      </p>
     </Card>
   );
 }
 
-function TrendCard({ history, today }) {
-  const data = [...history, { day: "Today", score: today }];
+function DirectionsCard({ directives }) {
+  const counts = directives.reduce((a, d) => ({ ...a, [d.level]: (a[d.level] || 0) + 1 }), {});
+  return (
+    <Card className="p-5 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <Eyebrow>Today's directions</Eyebrow>
+          <h2 className="mt-1 font-display text-2xl font-semibold text-slate-100">What your data says to do</h2>
+        </div>
+        <div className="flex gap-1.5">
+          {["stop", "adjust", "go"].filter((l) => counts[l]).map((l) => (
+            <span key={l} className="rounded-md px-2 py-0.5 font-mono text-[11px] uppercase tracking-wider"
+              style={{ color: LEVEL_META[l].color, background: `${LEVEL_META[l].color}1a` }}>
+              {counts[l]} {LEVEL_META[l].label}
+            </span>
+          ))}
+        </div>
+      </div>
+      <ul className="mt-4 space-y-2.5">
+        {directives.map((d) => {
+          const m = LEVEL_META[d.level];
+          const Icon = m.icon;
+          return (
+            <li key={d.id} className="grid grid-cols-[28px_1fr] gap-3 rounded-xl border-l-2 bg-slate-900/40 p-3" style={{ borderColor: m.color }}>
+              <Icon size={20} color={m.color} className="mt-0.5" />
+              <div className="min-w-0">
+                <p className="font-medium text-slate-100">{d.title}</p>
+                <p className="mt-0.5 text-sm text-slate-300">{d.action}</p>
+                <p className="mt-1 font-mono text-[11px] text-slate-500">{d.why}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+function TrendCard({ data, isExample }) {
   const avg = Math.round(data.reduce((s, d) => s + d.score, 0) / data.length);
   return (
     <Card className="p-5 sm:p-6">
       <div className="flex items-end justify-between gap-3">
         <div>
           <Eyebrow>7-day recovery</Eyebrow>
-          <p className="mt-1 font-display text-3xl font-semibold text-slate-100 tabular-nums">
+          <p className="mt-1 font-display text-3xl font-semibold tabular-nums text-slate-100">
             {avg}<span className="text-lg text-slate-500">% avg</span>
           </p>
         </div>
-        <span className="font-mono text-[11px] text-slate-500">Example history</span>
+        <span className="font-mono text-[11px] text-slate-500">{isExample ? "Example history" : `${data.length} days logged`}</span>
       </div>
-      <div className="mt-3 h-40">
+      <div className="mt-3 h-36">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
             <defs>
@@ -300,14 +202,10 @@ function TrendCard({ history, today }) {
             <YAxis domain={[0, 100]} ticks={[0, 50, 80, 100]} tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
             <ReferenceLine y={80} stroke="#22e58b" strokeOpacity={0.35} strokeDasharray="4 4" />
             <ReferenceLine y={50} stroke="#fb5a6e" strokeOpacity={0.35} strokeDasharray="4 4" />
-            <Tooltip
-              contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontSize: 12 }}
-              labelStyle={{ color: "#94a3b8" }} itemStyle={{ color: "#22d3ee" }}
-              formatter={(v) => [`${v}%`, "Recovery"]}
-            />
+            <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontSize: 12 }}
+              labelStyle={{ color: "#94a3b8" }} itemStyle={{ color: "#22d3ee" }} formatter={(v) => [`${v}%`, "Recovery"]} />
             <Area type="monotone" dataKey="score" stroke="#22d3ee" strokeWidth={2.5} fill="url(#trendFill)"
-              dot={{ r: 3, fill: "#0f172a", stroke: "#22d3ee", strokeWidth: 2 }}
-              activeDot={{ r: 5, fill: "#22d3ee" }} />
+              dot={{ r: 3, fill: "#0f172a", stroke: "#22d3ee", strokeWidth: 2 }} activeDot={{ r: 5, fill: "#22d3ee" }} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -315,22 +213,22 @@ function TrendCard({ history, today }) {
   );
 }
 
-function VitalsStrip({ c, hrvRatio }) {
+function VitalsStrip({ c, result, baselines, sleepDebt }) {
+  const sign = (v) => (v > 0 ? `+${v}` : `${v}`);
   const tiles = [
-    { label: "Sleep", value: `${c.sleepHours.toFixed(1)}h`, sub: `Quality ${c.sleepQuality}/10`, icon: Moon },
-    { label: "HRV", value: `${c.hrv}`, unit: "ms", sub: `${Math.round(hrvRatio * 100)}% of baseline`, icon: HeartPulse },
-    { label: "Resting HR", value: `${c.rhr}`, unit: "bpm", sub: `Baseline ${c.rhrBaseline}`, icon: Activity },
-    { label: "Ankle / hips", value: `${c.ankleHip}`, unit: "/5", sub: c.ankleHip >= 4 ? "Stiff — prioritise" : "Manageable", icon: Footprints },
+    { label: "Sleep", value: c.sleepHours.toFixed(1), unit: "h", sub: sleepDebt > 0 ? `${sleepDebt} h debt (3 nights)` : "No sleep debt", icon: Moon },
+    { label: "HRV", value: c.hrv, unit: "ms", sub: `${sign(result.hrvZ)} SD vs ${Math.round(baselines.hrv.mean)} ms normal`, icon: HeartPulse },
+    { label: "Resting HR", value: c.rhr, unit: "bpm", sub: `${sign(result.rhrDelta)} vs ${Math.round(baselines.rhr.mean)} bpm normal`, icon: Activity },
+    { label: "Ankle / hips", value: c.ankleHip, unit: "/5", sub: c.ankleHip >= 4 ? "Stiff — prioritise" : "Manageable", icon: Footprints },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {tiles.map((t) => {
         const Icon = t.icon;
         return (
           <Card key={t.label} className="p-4">
             <div className="flex items-center gap-2 text-slate-400">
-              <Icon size={14} />
-              <span className="font-mono text-[11px] uppercase tracking-[0.14em]">{t.label}</span>
+              <Icon size={14} /><span className="font-mono text-[11px] uppercase tracking-[0.14em]">{t.label}</span>
             </div>
             <p className="mt-2 font-display text-3xl font-semibold tabular-nums text-slate-100">
               {t.value}<span className="ml-0.5 text-base text-slate-500">{t.unit}</span>
@@ -363,7 +261,6 @@ function ScheduleTimeline({ items, done, toggle, accent }) {
           </div>
         </div>
       </div>
-
       <ol className="relative mt-6">
         <span className="absolute bottom-3 left-[67px] top-3 w-px bg-white/[0.08]" aria-hidden="true" />
         {items.map((item) => {
@@ -373,16 +270,14 @@ function ScheduleTimeline({ items, done, toggle, accent }) {
           return (
             <li key={item.id} className="relative grid grid-cols-[52px_32px_1fr] items-start gap-2 py-2.5">
               <span className={`pt-1 font-mono text-sm tabular-nums ${isDone ? "text-slate-600" : "text-slate-300"}`}>{item.time}</span>
-              <span className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full border"
-                style={{ borderColor: `${meta.color}55`, background: "#0f172a" }}>
+              <span className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full border" style={{ borderColor: `${meta.color}55`, background: "#0f172a" }}>
                 <Icon size={15} color={meta.color} />
               </span>
-              <div className={`flex min-w-0 items-start gap-3 rounded-xl px-3 py-2 transition ${isDone ? "bg-transparent" : "bg-white/[0.03] hover:bg-white/[0.06]"}`}>
+              <div className={`flex min-w-0 items-start gap-3 rounded-xl px-3 py-2 transition ${isDone ? "" : "bg-white/[0.03] hover:bg-white/[0.06]"}`}>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <p className={`font-medium ${isDone ? "text-slate-500 line-through" : "text-slate-100"}`}>{item.title}</p>
-                    <span className="rounded-md px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider"
-                      style={{ color: meta.color, background: `${meta.color}1a` }}>{fmtDur(item.dur)}</span>
+                    <span className="rounded-md px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider" style={{ color: meta.color, background: `${meta.color}1a` }}>{fmtDur(item.dur)}</span>
                   </div>
                   <p className={`mt-0.5 text-sm ${isDone ? "text-slate-600" : "text-slate-400"}`}>{item.detail}</p>
                 </div>
@@ -421,8 +316,7 @@ function MobilityPanel({ drills, done, toggle }) {
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <p className={`text-sm font-medium ${isDone ? "text-slate-500 line-through" : "text-slate-100"}`}>{d.name}</p>
-                  <span className="rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider"
-                    style={{ color: prColor[d.priority], background: `${prColor[d.priority]}1a` }}>{d.priority}</span>
+                  <span className="rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider" style={{ color: prColor[d.priority], background: `${prColor[d.priority]}1a` }}>{d.priority}</span>
                 </div>
                 <p className="mt-0.5 font-mono text-xs text-cyan-200/80">{d.dose}</p>
                 <p className="text-xs text-slate-400">{d.cue}</p>
@@ -435,6 +329,9 @@ function MobilityPanel({ drills, done, toggle }) {
   );
 }
 
+/* =========================================================================
+   Check-in modal
+   ========================================================================= */
 function Slider({ id, label, value, min, max, step = 1, unit = "", onChange, hint }) {
   return (
     <div>
@@ -449,25 +346,27 @@ function Slider({ id, label, value, min, max, step = 1, unit = "", onChange, hin
   );
 }
 
-function NumberField({ id, label, value, unit, onChange }) {
+function NumberField({ id, label, value, unit, onChange, synced }) {
   return (
     <div>
-      <label htmlFor={id} className="text-xs text-slate-400">{label}</label>
+      <label htmlFor={id} className="flex items-center gap-1.5 text-xs text-slate-400">
+        {label}{synced && <span className="rounded bg-emerald-400/15 px-1 font-mono text-[9px] uppercase text-emerald-300">Health</span>}
+      </label>
       <div className="mt-1 flex items-center rounded-lg border border-white/10 bg-slate-950/60 px-3 focus-within:border-cyan-400/60">
-        <input id={id} type="number" inputMode="numeric" value={value}
-          onChange={(e) => onChange(Number(e.target.value) || 0)}
-          className="w-full bg-transparent py-2 font-mono text-slate-100 outline-none" />
+        <input id={id} type="number" inputMode="decimal" value={value}
+          onChange={(e) => onChange(Number(e.target.value) || 0)} className="w-full bg-transparent py-2 font-mono text-slate-100 outline-none" />
         <span className="font-mono text-xs text-slate-500">{unit}</span>
       </div>
     </div>
   );
 }
 
-function CheckInModal({ initial, onClose, onSubmit }) {
+function CheckInModal({ initial, synced, history, today, onClose, onSubmit }) {
   const [f, setF] = useState(initial);
   const set = (k) => (v) => setF((p) => ({ ...p, [k]: v }));
-  const preview = calculateRecovery(f);
-  const arch = getArchetype(preview.score);
+  const preview = planDay({ checkin: f, history, today });
+  const arch = preview.archetype;
+  const isSynced = (k) => synced?.fields?.includes(k);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 backdrop-blur-sm sm:items-center sm:p-4"
@@ -478,41 +377,50 @@ function CheckInModal({ initial, onClose, onSubmit }) {
         <div className="flex items-start justify-between gap-4">
           <div>
             <Eyebrow>Morning check-in</Eyebrow>
-            <h2 id="checkin-title" className="mt-1 font-display text-3xl font-semibold text-slate-100">How did you wake up?</h2>
+            <h2 id="checkin-title" className="mt-1 font-display text-3xl font-semibold text-slate-100">
+              {synced ? "Health data in. Rate how you feel." : "How did you wake up?"}
+            </h2>
           </div>
-          <button onClick={onClose} aria-label="Close check-in"
-            className="rounded-full p-2 text-slate-400 hover:bg-white/5 hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-cyan-300">
+          <button onClick={onClose} aria-label="Close check-in" className="rounded-full p-2 text-slate-400 hover:bg-white/5 hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-cyan-300">
             <X size={20} />
           </button>
         </div>
 
         <div className="mt-6 space-y-6">
-          <fieldset className="space-y-4">
-            <legend className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200"><Moon size={15} /> Sleep</legend>
-            <Slider id="sleepHours" label="Duration" value={f.sleepHours} min={3} max={10} step={0.1} unit="h" onChange={set("sleepHours")} />
-            <Slider id="sleepQuality" label="Quality" value={f.sleepQuality} min={1} max={10} unit="/10" onChange={set("sleepQuality")} />
-          </fieldset>
-
           <fieldset>
-            <legend className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200"><HeartPulse size={15} /> Autonomic</legend>
-            <div className="grid grid-cols-2 gap-3">
-              <NumberField id="hrv" label="HRV today" value={f.hrv} unit="ms" onChange={set("hrv")} />
-              <NumberField id="hrvBaseline" label="HRV baseline" value={f.hrvBaseline} unit="ms" onChange={set("hrvBaseline")} />
-              <NumberField id="rhr" label="Resting HR today" value={f.rhr} unit="bpm" onChange={set("rhr")} />
-              <NumberField id="rhrBaseline" label="RHR baseline" value={f.rhrBaseline} unit="bpm" onChange={set("rhrBaseline")} />
+            <legend className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200"><Activity size={15} /> Soreness & stiffness</legend>
+            <div className="space-y-4">
+              <Slider id="upper" label="Upper body" value={f.upper} min={1} max={5} unit="/5" onChange={set("upper")} hint="1 none · 5 severe" />
+              <Slider id="lower" label="Lower body" value={f.lower} min={1} max={5} unit="/5" onChange={set("lower")} />
+              <Slider id="ankleHip" label="Ankle / hips" value={f.ankleHip} min={1} max={5} unit="/5" onChange={set("ankleHip")} hint="Counts double during sprain rehab" />
             </div>
           </fieldset>
-
-          <fieldset className="space-y-4">
-            <legend className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200"><Activity size={15} /> Soreness & stiffness</legend>
-            <Slider id="upper" label="Upper body" value={f.upper} min={1} max={5} unit="/5" onChange={set("upper")} hint="1 none · 5 severe" />
-            <Slider id="lower" label="Lower body" value={f.lower} min={1} max={5} unit="/5" onChange={set("lower")} />
-            <Slider id="ankleHip" label="Ankle / hips" value={f.ankleHip} min={1} max={5} unit="/5" onChange={set("ankleHip")} hint="Counts double during sprain rehab" />
-          </fieldset>
-
           <fieldset>
             <legend className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200"><Brain size={15} /> Mind</legend>
             <Slider id="energy" label="Mental energy" value={f.energy} min={1} max={5} unit="/5" onChange={set("energy")} hint="1 drained · 5 sharp" />
+          </fieldset>
+          <fieldset>
+            <legend className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200"><Moon size={15} /> Sleep</legend>
+            <div className="space-y-4">
+              <NumberField id="sleepHours" label="Duration" value={f.sleepHours} unit="h" onChange={set("sleepHours")} synced={isSynced("sleepHours")} />
+              <Slider id="sleepQuality" label="Quality (how rested you feel)" value={f.sleepQuality} min={1} max={10} unit="/10" onChange={set("sleepQuality")} />
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200"><HeartPulse size={15} /> Heart</legend>
+            <div className="grid grid-cols-2 gap-3">
+              <NumberField id="hrv" label="HRV" value={f.hrv} unit="ms" onChange={set("hrv")} synced={isSynced("hrv")} />
+              <NumberField id="rhr" label="Resting HR" value={f.rhr} unit="bpm" onChange={set("rhr")} synced={isSynced("rhr")} />
+              {preview.baselines.source === "manual" && (
+                <>
+                  <NumberField id="hrvBaseline" label="HRV baseline (temporary)" value={f.hrvBaseline} unit="ms" onChange={set("hrvBaseline")} />
+                  <NumberField id="rhrBaseline" label="RHR baseline (temporary)" value={f.rhrBaseline} unit="bpm" onChange={set("rhrBaseline")} />
+                </>
+              )}
+            </div>
+            {preview.baselines.source === "manual" && (
+              <p className="mt-2 text-xs text-slate-500">Baselines are replaced by your own 30-day averages after {preview.baselines.daysNeeded} more check-ins.</p>
+            )}
           </fieldset>
         </div>
 
@@ -521,9 +429,8 @@ function CheckInModal({ initial, onClose, onSubmit }) {
             <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">Live preview</p>
             <p className="font-display text-lg font-semibold tracking-wide" style={{ color: arch.color }}>{arch.label}</p>
           </div>
-          <span className="font-display text-4xl font-bold tabular-nums" style={{ color: arch.color }}>{preview.score}%</span>
+          <span className="font-display text-4xl font-bold tabular-nums" style={{ color: arch.color }}>{preview.result.score}%</span>
         </div>
-
         <button onClick={() => onSubmit(f)}
           className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-400 py-3.5 font-semibold text-slate-950 shadow-[0_0_30px_-6px_rgba(34,211,238,0.6)] transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-white">
           <Zap size={18} /> Calculate & Generate Today's Plan
@@ -534,41 +441,59 @@ function CheckInModal({ initial, onClose, onSubmit }) {
 }
 
 /* =========================================================================
-   6. MAIN DASHBOARD
+   Main dashboard
    ========================================================================= */
-const STORAGE_KEY = "chinh-v1-2026-10-15";
-
-function loadSaved() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || null; } catch { return null; }
-}
-
 export default function CHINHDashboard() {
-  const saved = loadSaved();
-  const [checkin, setCheckin] = useState(saved?.checkin || DEFAULT_CHECKIN);
-  const [done, setDone] = useState(saved?.done || {});
+  const today = dateKey();
+  const [history, setHistory] = useState(() => load(KEYS.history, []));
+  const [checkin, setCheckin] = useState(() => ({ ...DEFAULT_CHECKIN, ...load(KEYS.checkin, {}) }));
+  const [done, setDone] = useState(() => load(KEYS.done(today), {}));
+  const [lastSync, setLastSync] = useState(() => load(KEYS.sync, null));
   const [modalOpen, setModalOpen] = useState(false);
 
-  const result = useMemo(() => calculateRecovery(checkin), [checkin]);
-  const archetype = getArchetype(result.score);
-  const schedule = useMemo(() => generateSchedule(archetype.id, checkin), [archetype.id, checkin]);
-  const drills = useMemo(() => buildMobility(checkin, archetype.id), [checkin, archetype.id]);
+  const day = useMemo(() => planDay({ checkin, history, today }), [checkin, history, today]);
+  const { result, archetype, baselines, directives, schedule, drills } = day;
 
+  // Apple Health sync: the Shortcut opens this page with #hrv=…&rhr=…&sleep=…
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ checkin, done })); } catch { /* storage unavailable */ }
-  }, [checkin, done]);
+    const synced = parseSyncHash(window.location.hash);
+    if (!synced) return;
+    window.history.replaceState(null, "", window.location.pathname + window.location.search); // clear numbers from the address bar
+    const sync = { date: today, at: new Date().toISOString(), fields: Object.keys(synced) };
+    setCheckin((c) => ({ ...c, ...synced }));
+    setLastSync(sync);
+    save(KEYS.sync, sync);
+    setModalOpen(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => save(KEYS.checkin, checkin), [checkin]);
+  useEffect(() => save(KEYS.done(today), done), [done, today]);
+  useEffect(() => save(KEYS.history, history), [history]);
 
   const toggle = (id) => setDone((d) => ({ ...d, [id]: !d[id] }));
 
   const handleSubmit = (next) => {
+    const nextDay = planDay({ checkin: next, history, today });
     setCheckin(next);
-    setDone((d) => Object.fromEntries(Object.entries(d).filter(([k]) => !k.includes("-")))); // keep drills, reset schedule
+    setHistory((h) => upsertDay(h, {
+      date: today, hrv: next.hrv, rhr: next.rhr, sleepHours: next.sleepHours, sleepQuality: next.sleepQuality,
+      upper: next.upper, lower: next.lower, ankleHip: next.ankleHip, energy: next.energy, score: nextDay.result.score,
+    }));
     setModalOpen(false);
   };
 
-  const flags = [];
-  if (checkin.ankleHip >= 4) flags.push("Ankle/hip stiffness is 4+. No cutting or sprint drills today.");
-  if (result.hrvRatio < 0.85) flags.push(`HRV is ${Math.round(result.hrvRatio * 100)}% of baseline. Cap intensity at RPE 7.`);
-  if (checkin.sleepHours < 6.5) flags.push("Under 6.5 h sleep. Add a 20-min NSDR block after lunch.");
+  const realDays = history.filter((h) => Number.isFinite(h.score) && h.date < today).slice(-6);
+  const isExample = realDays.length < 2;
+  const weekday = (key) => new Date(`${key}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short" });
+  const trend = isExample
+    ? [...EXAMPLE_TREND.map((score, i) => ({ day: `-${6 - i}d`, score })), { day: "Today", score: result.score }]
+    : [...realDays.map((h) => ({ day: weekday(h.date), score: h.score })), { day: "Today", score: result.score }];
+
+  const now = new Date();
+  const longDate = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const shortDate = now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+  const syncedToday = lastSync?.date === today;
+  const checkedInToday = history.some((h) => h.date === today);
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
@@ -585,31 +510,39 @@ export default function CHINHDashboard() {
             </div>
             <div>
               <h1 className="font-display text-2xl font-bold tracking-[0.12em]">CHINH</h1>
-              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">Thursday · 15 October 2026</p>
+              <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-400">{longDate}</p>
             </div>
           </div>
-          <button onClick={() => setModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20 focus-visible:ring-2 focus-visible:ring-cyan-300">
-            <ClipboardCheck size={17} /> Morning check-in
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-[11px] ${syncedToday ? "bg-emerald-400/10 text-emerald-300" : "bg-white/5 text-slate-400"}`}>
+              <RefreshCw size={12} />
+              {syncedToday
+                ? `Apple Health · ${new Date(lastSync.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
+                : "Not synced today"}
+            </span>
+            <button onClick={() => setModalOpen(true)}
+              className="flex items-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20 focus-visible:ring-2 focus-visible:ring-cyan-300">
+              <ClipboardCheck size={17} /> {checkedInToday ? "Update check-in" : "Morning check-in"}
+            </button>
+          </div>
         </header>
 
+        {!checkedInToday && (
+          <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-2.5 text-sm text-amber-200">
+            {history.length ? "You haven't checked in today. The plan below uses your last check-in." : "Showing example data. Run your Apple Health Shortcut or open the check-in to start."}
+          </p>
+        )}
+
         <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-          <RecoveryCard result={result} archetype={archetype} />
+          <RecoveryCard result={result} archetype={archetype} baselines={baselines} dateLabel={shortDate} />
           <div className="flex min-w-0 flex-col gap-4">
-            <TrendCard history={DEMO_HISTORY} today={result.score} />
-            <VitalsStrip c={checkin} hrvRatio={result.hrvRatio} />
-            {flags.length > 0 && (
-              <Card className="p-4">
-                <div className="flex items-center gap-2 text-amber-300">
-                  <Info size={15} /><span className="font-mono text-[11px] uppercase tracking-[0.14em]">Coach notes</span>
-                </div>
-                <ul className="mt-2 space-y-1 text-sm text-slate-300">
-                  {flags.map((f) => <li key={f}>{f}</li>)}
-                </ul>
-              </Card>
-            )}
+            <DirectionsCard directives={directives} />
+            <TrendCard data={trend} isExample={isExample} />
           </div>
+        </div>
+
+        <div className="mt-4">
+          <VitalsStrip c={checkin} result={result} baselines={baselines} sleepDebt={day.sleepDebt} />
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
@@ -618,11 +551,14 @@ export default function CHINHDashboard() {
         </div>
 
         <p className="mt-6 text-center font-mono text-[11px] text-slate-500">
-          Example check-in and 6-day history pre-loaded. Open Morning check-in to enter your own numbers.
+          Your data stays in this browser on this device. Nothing is uploaded.
         </p>
       </div>
 
-      {modalOpen && <CheckInModal initial={checkin} onClose={() => setModalOpen(false)} onSubmit={handleSubmit} />}
+      {modalOpen && (
+        <CheckInModal initial={checkin} synced={syncedToday ? lastSync : null} history={history} today={today}
+          onClose={() => setModalOpen(false)} onSubmit={handleSubmit} />
+      )}
     </div>
   );
 }
