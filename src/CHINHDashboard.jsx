@@ -5,9 +5,12 @@ import {
 import {
   Moon, HeartPulse, Activity, Sun, Dumbbell, Brain, Wind, ShoppingCart,
   BedDouble, Footprints, ClipboardCheck, X, Zap, Check, BookOpen, Utensils,
-  Target, AlertOctagon, SlidersHorizontal, CheckCircle2, RefreshCw,
+  Target, AlertOctagon, SlidersHorizontal, CheckCircle2, RefreshCw, CalendarRange,
 } from "lucide-react";
-import { planDay, parseSyncHash, parseBackfillHash, mergeBackfill, upsertDay, dateKey } from "./engine.js";
+import {
+  planDay, parseSyncHash, parseBackfillHash, mergeBackfill, upsertDay, dateKey, weeklyReview,
+  getArchetype, MOBILITY_DAY_MIN_DRILLS,
+} from "./engine.js";
 
 /* =========================================================================
    Storage (on this device only — wrapped so private mode never crashes)
@@ -157,22 +160,24 @@ function DirectionsCard({ directives }) {
         </div>
       </div>
       <ul className="mt-4 space-y-2.5">
-        {directives.map((d) => {
-          const m = LEVEL_META[d.level];
-          const Icon = m.icon;
-          return (
-            <li key={d.id} className="grid grid-cols-[28px_1fr] gap-3 rounded-xl border-l-2 bg-slate-900/40 p-3" style={{ borderColor: m.color }}>
-              <Icon size={20} color={m.color} className="mt-0.5" />
-              <div className="min-w-0">
-                <p className="font-medium text-slate-100">{d.title}</p>
-                <p className="mt-0.5 text-sm text-slate-300">{d.action}</p>
-                <p className="mt-1 font-mono text-[11px] text-slate-500">{d.why}</p>
-              </div>
-            </li>
-          );
-        })}
+        {directives.map((d) => <DirectiveItem key={d.id} d={d} />)}
       </ul>
     </Card>
+  );
+}
+
+function DirectiveItem({ d }) {
+  const m = LEVEL_META[d.level];
+  const Icon = m.icon;
+  return (
+    <li className="grid grid-cols-[28px_1fr] gap-3 rounded-xl border-l-2 bg-slate-900/40 p-3" style={{ borderColor: m.color }}>
+      <Icon size={20} color={m.color} className="mt-0.5" />
+      <div className="min-w-0">
+        <p className="font-medium text-slate-100">{d.title}</p>
+        <p className="mt-0.5 text-sm text-slate-300">{d.action}</p>
+        <p className="mt-1 font-mono text-[11px] text-slate-500">{d.why}</p>
+      </div>
+    </li>
   );
 }
 
@@ -325,6 +330,136 @@ function MobilityPanel({ drills, done, toggle }) {
           );
         })}
       </ul>
+    </Card>
+  );
+}
+
+function WeeklyReviewCard({ review }) {
+  const fmt = (key) => new Date(`${key}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const sign = (v) => (v > 0 ? `+${v}` : `${v}`);
+  const { score, days, hrv, rhr, sleep, ankle, adherence, fired } = review;
+  const mix = [
+    { id: "high", label: "High", n: days.high },
+    { id: "balanced", label: "Balanced", n: days.balanced },
+    { id: "restore", label: "Restore", n: days.restore },
+  ].map((m) => ({ ...m, color: getArchetype(m.id === "high" ? 80 : m.id === "balanced" ? 50 : 0).color }));
+  const tiles = [
+    { label: "HRV", value: hrv.avg ?? "–", unit: "ms", sub: hrv.pct != null ? `${hrv.pct}% of your ${hrv.baseline} ms normal` : "No baseline yet", icon: HeartPulse },
+    { label: "Resting HR", value: rhr.avg ?? "–", unit: "bpm", sub: rhr.delta != null ? `${sign(rhr.delta)} vs ${rhr.baseline} bpm normal` : "No baseline yet", icon: Activity },
+    { label: "Sleep", value: sleep.avg ?? "–", unit: "h", sub: sleep.nights ? `${sleep.under7}/${sleep.nights} nights under 7 h` : "No nights logged", icon: Moon },
+    { label: "Ankle / hips", value: ankle.avg ?? "–", unit: "/5", sub: ankle.delta != null ? `${sign(ankle.delta)} vs last week` : "First week logged", icon: Footprints },
+  ];
+  const maxFired = Math.max(1, ...fired.map((f) => f.count));
+
+  return (
+    <Card className="p-5 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <Eyebrow>Weekly review</Eyebrow>
+          <h2 className="mt-1 font-display text-2xl font-semibold text-slate-100">Last 7 days</h2>
+          <p className="flex items-center gap-1.5 text-xs text-slate-400">
+            <CalendarRange size={13} /> {fmt(review.from)} – {fmt(review.to)} · {review.checkins} check-in{review.checkins === 1 ? "" : "s"}
+          </p>
+        </div>
+        {score.avg != null && (
+          <div className="sm:text-right">
+            <p className="font-display text-4xl font-bold tabular-nums text-slate-100">{score.avg}<span className="text-lg text-slate-500">% avg</span></p>
+            {score.delta != null && (
+              <p className={`font-mono text-xs ${score.delta >= 0 ? "text-emerald-300" : "text-rose-300"}`}>{sign(score.delta)} vs previous 7 days</p>
+            )}
+          </div>
+        )}
+      </div>
+
+      {review.needed > 0 ? (
+        <p className="mt-5 rounded-xl border border-white/[0.06] bg-slate-900/40 px-4 py-3 text-sm text-slate-300">
+          Log {review.needed} more check-in{review.needed === 1 ? "" : "s"} this week for a full review.
+        </p>
+      ) : (
+        <>
+          <div className="mt-5 grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+            <div>
+              <div className="flex h-3 overflow-hidden rounded-full bg-slate-700/50" role="img"
+                aria-label={mix.map((m) => `${m.n} ${m.label}`).join(", ")}>
+                {mix.filter((m) => m.n).map((m) => (
+                  <div key={m.id} style={{ width: `${(m.n / review.checkins) * 100}%`, background: m.color }} />
+                ))}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] text-slate-400">
+                {mix.map((m) => (
+                  <span key={m.id} className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full" style={{ background: m.color }} />{m.n} {m.label}
+                  </span>
+                ))}
+                {score.best && score.worst && (
+                  <span>Best {score.best.score}% ({fmt(score.best.date)}) · Lowest {score.worst.score}% ({fmt(score.worst.date)})</span>
+                )}
+              </div>
+            </div>
+            {adherence.days > 0 && (
+              <div className="flex items-center gap-5">
+                <div className="flex items-center gap-2">
+                  <MiniRing pct={(adherence.planPct ?? 0) / 100} color="#22e58b" />
+                  <div>
+                    <p className="font-display text-xl font-semibold tabular-nums text-slate-100">{adherence.planPct}%</p>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">plan done</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <MiniRing pct={adherence.mobilityDays / adherence.days} color="#22d3ee" />
+                  <div>
+                    <p className="font-display text-xl font-semibold tabular-nums text-slate-100">{adherence.mobilityDays}/{adherence.days}</p>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400" title={`${MOBILITY_DAY_MIN_DRILLS}+ drills ticked`}>mobility days</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {tiles.map((t) => {
+              const Icon = t.icon;
+              return (
+                <div key={t.label} className="rounded-xl border border-white/[0.05] bg-slate-900/40 p-3">
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <Icon size={13} /><span className="font-mono text-[10px] uppercase tracking-[0.14em]">{t.label} · avg</span>
+                  </div>
+                  <p className="mt-1 font-display text-2xl font-semibold tabular-nums text-slate-100">
+                    {t.value}<span className="ml-0.5 text-sm text-slate-500">{t.unit}</span>
+                  </p>
+                  <p className="text-xs text-slate-400">{t.sub}</p>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)]">
+            <div>
+              <p className="mb-2 text-sm font-semibold text-slate-200">Focus for next week</p>
+              <ul className="space-y-2.5">{review.focus.map((d) => <DirectiveItem key={d.id} d={d} />)}</ul>
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-200">Directions fired</p>
+              <p className="mb-2 text-xs text-slate-500">Something firing every day is a threshold to tune.</p>
+              {fired.length ? (
+                <ul className="space-y-1.5">
+                  {fired.map((f) => (
+                    <li key={f.id} className="grid grid-cols-[1fr_auto] items-center gap-x-3 text-xs">
+                      <span className="truncate text-slate-300">{f.name}</span>
+                      <span className="font-mono tabular-nums text-slate-400">{f.count}×</span>
+                      <div className="col-span-2 mt-0.5 h-1 overflow-hidden rounded-full bg-slate-700/50">
+                        <div className="h-full rounded-full bg-cyan-300/70" style={{ width: `${(f.count / maxFired) * 100}%` }} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-xs text-slate-500">Logged from your next check-in onwards.</p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </Card>
   );
 }
@@ -494,6 +629,7 @@ export default function CHINHDashboard() {
     setHistory((h) => upsertDay(h, {
       date: today, hrv: next.hrv, rhr: next.rhr, sleepHours: next.sleepHours, sleepQuality: next.sleepQuality,
       upper: next.upper, lower: next.lower, ankleHip: next.ankleHip, energy: next.energy, score: nextDay.result.score,
+      directives: nextDay.directives.map((d) => d.id),
     }));
     setModalOpen(false);
   };
@@ -511,6 +647,20 @@ export default function CHINHDashboard() {
   const syncedToday = lastSync?.date === today;
   const checkedInToday = history.some((h) => h.date === today && Number.isFinite(h.score));
   const hasCheckins = history.some((h) => Number.isFinite(h.score));
+
+  // Keep today's plan completion in history so the weekly review can count it
+  const blocksDone = schedule.filter((i) => done[i.id]).length;
+  const drillsDone = drills.filter((d) => done[d.id]).length;
+  useEffect(() => {
+    if (!checkedInToday) return;
+    setHistory((h) => {
+      const t = h.find((d) => d.date === today);
+      if (t && t.blocksDone === blocksDone && t.blocksTotal === schedule.length && t.drillsDone === drillsDone) return h;
+      return upsertDay(h, { date: today, blocksDone, blocksTotal: schedule.length, drillsDone });
+    });
+  }, [checkedInToday, blocksDone, drillsDone, schedule.length, today]);
+
+  const review = useMemo(() => weeklyReview(history, today), [history, today]);
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
@@ -572,6 +722,10 @@ export default function CHINHDashboard() {
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
           <ScheduleTimeline items={schedule} done={done} toggle={toggle} accent={archetype.color} />
           <MobilityPanel drills={drills} done={done} toggle={toggle} />
+        </div>
+
+        <div className="mt-4">
+          <WeeklyReviewCard review={review} />
         </div>
 
         <p className="mt-6 text-center font-mono text-[11px] text-slate-500">

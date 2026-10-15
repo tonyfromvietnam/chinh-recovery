@@ -175,61 +175,96 @@ export function getArchetype(score) {
    Each direction: what to do, and the number that triggered it. */
 const LEVEL_ORDER = { stop: 0, adjust: 1, go: 2 };
 
+/* Every trigger in one place, so tuning after real use is a one-line change.
+   The weekly review counts how often each direction fired to show which ones need it. */
+export const THRESHOLDS = {
+  hrvStopZ: -1.5, // HRV this many SD under normal → no intensity
+  hrvAdjustZ: -1, // → cap at RPE 7
+  rhrStopDelta: 5, // bpm over normal → possible illness
+  rhrAdjustDelta: 3, // → hydrate early
+  sleepDebtH: 2, // hours owed across 3 nights
+  shortSleepH: 6, // last night under this → NSDR
+  ankleStop: 4, // ankle/hip stiffness /5 → no football
+  ankleAdjust: 3, // → prime before loading
+  lowerSore: 4, // lower-body soreness /5 → upper session
+  lowEnergy: 2, // mental energy /5 → split deep work
+  trendFloor: 65, // 3 falling days ending under this → lighter week
+  pushScore: 80, // green light needs this score…
+  pushHrvZ: 0.5, // …and HRV this many SD above normal
+};
+
+export const DIRECTIVE_NAMES = {
+  "hrv-low": "No high intensity (low HRV)",
+  "hrv-dip": "Cap at RPE 7 (HRV dip)",
+  "rhr-high": "Resting HR elevated",
+  "rhr-up": "Hydrate early (RHR up)",
+  "sleep-debt": "Lights out by 22:00 (sleep debt)",
+  "short-sleep": "20-min NSDR (short night)",
+  "ankle-flare": "No football (ankle flare)",
+  "ankle-prime": "Prime the ankle",
+  "lower-sore": "Upper body only",
+  "low-energy": "Split deep work",
+  "trend-down": "Plan a lighter week",
+  push: "Green light: push",
+  "on-track": "Stay the course",
+};
+
 export function generateDirectives({ c, result, baselines, history, today, archetypeId }) {
+  const T = THRESHOLDS;
   const d = [];
   const hrvBase = Math.round(baselines.hrv.mean);
   const rhrBase = Math.round(baselines.rhr.mean);
   const debt = sleepDebt(c.sleepHours, baselines.recentSleep);
 
   // Autonomic
-  if (result.hrvZ <= -1.5) {
+  if (result.hrvZ <= T.hrvStopZ) {
     d.push({ id: "hrv-low", level: "stop", title: "No high-intensity work today",
       why: `HRV ${c.hrv} ms vs your ${hrvBase} ms normal (${result.hrvZ} SD).`,
       action: "Swap training for a 30-min Zone 2 walk and mobility." });
-  } else if (result.hrvZ <= -1) {
+  } else if (result.hrvZ <= T.hrvAdjustZ) {
     d.push({ id: "hrv-dip", level: "adjust", title: "Cap intensity at RPE 7",
       why: `HRV ${c.hrv} ms is ${100 - result.hrvPct}% under your ${hrvBase} ms normal.`,
       action: "Keep the session, drop the top sets, stop 3 reps short of failure." });
   }
-  if (result.rhrDelta >= 5) {
+  if (result.rhrDelta >= T.rhrStopDelta) {
     d.push({ id: "rhr-high", level: "stop", title: "Resting heart rate is elevated",
       why: `${c.rhr} bpm, ${result.rhrDelta} above your ${rhrBase} bpm normal.`,
       action: "Possible illness or dehydration. 750 ml water before noon, skip football, re-check tomorrow." });
-  } else if (result.rhrDelta >= 3) {
+  } else if (result.rhrDelta >= T.rhrAdjustDelta) {
     d.push({ id: "rhr-up", level: "adjust", title: "Hydrate early",
       why: `Resting HR ${c.rhr} bpm, ${result.rhrDelta} above normal.`,
       action: "500 ml water with electrolytes before 10:00. No caffeine after 13:00." });
   }
 
   // Sleep
-  if (debt >= 2) {
+  if (debt >= T.sleepDebtH) {
     d.push({ id: "sleep-debt", level: "adjust", title: "Lights out by 22:00 tonight",
       why: `${debt} h sleep debt across the last 3 nights.`,
       action: "Wind-down moved 30 min earlier. Bedroom cool and dark." });
   }
-  if (c.sleepHours < 6) {
+  if (c.sleepHours < T.shortSleepH) {
     d.push({ id: "short-sleep", level: "adjust", title: "Add a 20-min NSDR after lunch",
       why: `Only ${c.sleepHours} h sleep last night.`,
       action: "Lie down, eyes closed, guided NSDR. Not a nap longer than 25 min." });
   }
 
   // Ankle / kinetic chain
-  if (c.ankleHip >= 4) {
+  if (c.ankleHip >= T.ankleStop) {
     d.push({ id: "ankle-flare", level: "stop", title: "No football, jumping or cutting",
       why: `Ankle/hip stiffness ${c.ankleHip}/5.`,
       action: "Knee-to-Wall Pulses and Ankle CARs every 3–4 hours today." });
-  } else if (c.ankleHip === 3) {
+  } else if (c.ankleHip >= T.ankleAdjust) {
     d.push({ id: "ankle-prime", level: "adjust", title: "Prime the ankle before loading",
       why: `Ankle/hip stiffness ${c.ankleHip}/5.`,
       action: "Knee-to-Wall Pulses + Ankle CARs before any training." });
   }
-  if (c.lower >= 4) {
+  if (c.lower >= T.lowerSore) {
     d.push({ id: "lower-sore", level: "adjust", title: "Train upper body today",
       why: `Lower-body soreness ${c.lower}/5.`, action: "Schedule now shows an upper session." });
   }
 
   // Mind
-  if (c.energy <= 2) {
+  if (c.energy <= T.lowEnergy) {
     d.push({ id: "low-energy", level: "adjust", title: "Split your deep work",
       why: `Mental energy ${c.energy}/5.`,
       action: "Two 45-min sprints with a 10-min walk between, instead of one long block." });
@@ -237,14 +272,14 @@ export function generateDirectives({ c, result, baselines, history, today, arche
 
   // Trend: 3 days falling
   const recent = history.filter((h) => h.date <= today && Number.isFinite(h.score)).slice(-3);
-  if (recent.length === 3 && recent[0].score > recent[1].score && recent[1].score > recent[2].score && recent[2].score < 65) {
+  if (recent.length === 3 && recent[0].score > recent[1].score && recent[1].score > recent[2].score && recent[2].score < T.trendFloor) {
     d.push({ id: "trend-down", level: "adjust", title: "Plan a lighter week",
       why: `Recovery fell 3 days in a row: ${recent.map((r) => r.score).join(" → ")}%.`,
       action: "Drop one training session this week or make it a deload." });
   }
 
   // Green lights
-  if (result.score >= 80 && result.hrvZ >= 0.5 && !d.some((x) => x.level === "stop")) {
+  if (result.score >= T.pushScore && result.hrvZ >= T.pushHrvZ && !d.some((x) => x.level === "stop")) {
     d.push({ id: "push", level: "go", title: "Green light: push today",
       why: `Score ${result.score}% and HRV ${result.hrvZ > 0 ? "+" : ""}${result.hrvZ} SD above normal.`,
       action: "Attempt a top set or go full intensity at football." });
@@ -375,4 +410,130 @@ export function planDay({ checkin, history, today }) {
     drills: buildMobility(checkin, archetype.id),
     sleepDebt: sleepDebt(checkin.sleepHours, baselines.recentSleep),
   };
+}
+
+/* ---------- 9. Weekly review ----------
+   Last 7 days (today included) against the 7 before. HRV and RHR are compared with
+   the 30-day baseline as it stood when the week started, so a bad week can't hide
+   by dragging its own baseline down. Each focus item states the number behind it. */
+export const REVIEW_MIN_CHECKINS = 3;
+export const MOBILITY_DAY_MIN_DRILLS = 4; // the four drills that are always on the list
+
+const avgOf = (rows, key, digits = 1) => {
+  const xs = rows.map((r) => r[key]).filter(Number.isFinite);
+  if (!xs.length) return null;
+  const f = 10 ** digits;
+  return Math.round(mean(xs) * f) / f;
+};
+
+export function weeklyReview(history, today) {
+  const from = shiftKey(today, -6);
+  const prevFrom = shiftKey(today, -13);
+  const inWeek = history.filter((h) => h.date >= from && h.date <= today);
+  const inPrev = history.filter((h) => h.date >= prevFrom && h.date < from);
+  const week = inWeek.filter((h) => Number.isFinite(h.score));
+  const prev = inPrev.filter((h) => Number.isFinite(h.score));
+
+  // Score and day mix
+  const avg = avgOf(week, "score", 0);
+  const prevAvg = avgOf(prev, "score", 0);
+  const byScore = [...week].sort((a, b) => b.score - a.score);
+  const days = { high: 0, balanced: 0, restore: 0 };
+  week.forEach((h) => { days[getArchetype(h.score).id] += 1; });
+
+  // Autonomic vs the baseline at the start of the week
+  const b = computeBaselines(history, from, {});
+  const rolling = b.source === "rolling";
+  const hrvAvg = avgOf(inWeek, "hrv", 0);
+  const rhrAvg = avgOf(inWeek, "rhr", 0);
+  const hrv = { avg: hrvAvg, baseline: rolling ? Math.round(b.hrv.mean) : null,
+    pct: rolling && hrvAvg != null ? Math.round((hrvAvg / b.hrv.mean) * 100) : null };
+  const rhr = { avg: rhrAvg, baseline: rolling ? Math.round(b.rhr.mean) : null,
+    delta: rolling && rhrAvg != null ? Math.round(rhrAvg - b.rhr.mean) : null };
+
+  // Sleep
+  const nights = inWeek.map((h) => h.sleepHours).filter(Number.isFinite);
+  const sleep = { avg: avgOf(inWeek, "sleepHours"), nights: nights.length,
+    under7: nights.filter((h) => h < 7).length,
+    debt: round1(nights.reduce((s, h) => s + Math.max(0, SLEEP_TARGET_H - h), 0)) };
+
+  // Ankle rehab
+  const ankleAvg = avgOf(week, "ankleHip");
+  const anklePrev = avgOf(prev, "ankleHip");
+  const ankle = { avg: ankleAvg, prevAvg: anklePrev,
+    delta: ankleAvg != null && anklePrev != null ? round1(ankleAvg - anklePrev) : null };
+
+  // Adherence (only days where the plan was tracked)
+  const tracked = week.filter((h) => Number.isFinite(h.blocksTotal) && h.blocksTotal > 0);
+  const blocksDone = tracked.reduce((s, h) => s + (h.blocksDone || 0), 0);
+  const blocksTotal = tracked.reduce((s, h) => s + h.blocksTotal, 0);
+  const adherence = { days: tracked.length,
+    planPct: blocksTotal ? Math.round((blocksDone / blocksTotal) * 100) : null,
+    mobilityDays: tracked.filter((h) => (h.drillsDone || 0) >= MOBILITY_DAY_MIN_DRILLS).length };
+
+  // How often each direction fired — the evidence for tuning THRESHOLDS
+  const counts = {};
+  week.forEach((h) => (h.directives || []).forEach((id) => { counts[id] = (counts[id] || 0) + 1; }));
+  const fired = Object.entries(counts)
+    .map(([id, count]) => ({ id, count, name: DIRECTIVE_NAMES[id] || id }))
+    .sort((a, b) => b.count - a.count || a.id.localeCompare(b.id));
+
+  const review = {
+    from, to: today, checkins: week.length,
+    needed: Math.max(0, REVIEW_MIN_CHECKINS - week.length),
+    score: { avg, prevAvg, delta: avg != null && prevAvg != null ? avg - prevAvg : null,
+      best: byScore[0] || null, worst: byScore.length > 1 ? byScore[byScore.length - 1] : null },
+    days, hrv, rhr, sleep, ankle, adherence, fired,
+  };
+  review.focus = review.needed ? [] : weeklyFocus(review);
+  return review;
+}
+
+function weeklyFocus({ score, days, hrv, rhr, sleep, ankle, adherence, checkins }) {
+  const f = [];
+  if (hrv.pct != null && hrv.pct <= 95) {
+    f.push({ id: "w-hrv", level: hrv.pct <= 90 ? "stop" : "adjust", title: "Make next week a deload",
+      why: `HRV averaged ${hrv.avg} ms, ${100 - hrv.pct}% under your ${hrv.baseline} ms normal.`,
+      action: "Cut working sets by a third and keep RPE ≤ 7 until HRV is back within 5%." });
+  }
+  if (rhr.delta != null && rhr.delta >= THRESHOLDS.rhrAdjustDelta) {
+    f.push({ id: "w-rhr", level: "adjust", title: "Resting HR is running high",
+      why: `Averaged ${rhr.avg} bpm, ${rhr.delta} above your ${rhr.baseline} bpm normal.`,
+      action: "500 ml water before 10:00 daily, caffeine cut-off 13:00. Watch for illness." });
+  }
+  if (sleep.avg != null && sleep.avg < 7) {
+    f.push({ id: "w-sleep", level: "adjust", title: "Protect your sleep window",
+      why: `Averaged ${sleep.avg} h; ${sleep.under7} of ${sleep.nights} nights under 7 h (${sleep.debt} h owed).`,
+      action: "Lights out by 22:30 on at least 5 nights." });
+  }
+  if (days.restore >= 3) {
+    f.push({ id: "w-restore", level: "adjust", title: "Plan a lighter week",
+      why: `${days.restore} Active Restoration days out of ${checkins}.`,
+      action: "Drop one training session or swap a football session for Zone 2." });
+  }
+  if (ankle.avg != null && ankle.avg >= 3) {
+    f.push({ id: "w-ankle", level: "adjust", title: "Ankle work every day",
+      why: `Ankle/hip stiffness averaged ${ankle.avg}/5${ankle.delta != null ? ` (${ankle.delta > 0 ? "+" : ""}${ankle.delta} vs last week)` : ""}.`,
+      action: "Knee-to-Wall Pulses + Ankle CARs every morning and before any training." });
+  } else if (ankle.delta != null && ankle.delta <= -0.5) {
+    f.push({ id: "w-ankle-up", level: "go", title: "Ankle is improving",
+      why: `Stiffness down from ${ankle.prevAvg} to ${ankle.avg}/5.`,
+      action: "Keep the drills and add Single-Leg RDL 3 × 8 to build stability." });
+  }
+  if (adherence.days >= REVIEW_MIN_CHECKINS && adherence.mobilityDays < 5) {
+    f.push({ id: "w-mobility", level: "adjust", title: "Hit mobility on 5+ days",
+      why: `Full ankle–hip routine on ${adherence.mobilityDays} of ${adherence.days} tracked days.`,
+      action: "Do the four core drills straight after the morning check-in." });
+  }
+  if (days.high >= 4 && (hrv.pct == null || hrv.pct >= 100) && !f.some((x) => x.level === "stop")) {
+    f.push({ id: "w-progress", level: "go", title: "Room to progress",
+      why: `${days.high} High Output days${hrv.pct != null ? ` and HRV at ${hrv.pct}% of normal` : ""}.`,
+      action: "Add 2.5 kg to your main lifts or one extra working set." });
+  }
+  if (!f.some((x) => x.level !== "go")) {
+    f.push({ id: "w-steady", level: "go", title: "Repeat this week",
+      why: `Averaged ${score.avg}% with no red flags in sleep, HRV, resting HR or ankle.`,
+      action: "Same structure next week." });
+  }
+  return f.sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]);
 }

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parseSyncHash, computeBaselines, calculateRecovery, planDay, upsertDay, shiftKey, sleepDebt,
-  parseBackfillHash, mergeBackfill,
+  parseBackfillHash, mergeBackfill, weeklyReview, THRESHOLDS,
 } from "../src/engine.js";
 
 const TODAY = "2026-10-15";
@@ -111,4 +111,70 @@ test("backfill: 30 days makes baselines rolling immediately", () => {
 test("history: upsert merges same day", () => {
   const h = upsertDay([{ date: TODAY, hrv: 50 }], { date: TODAY, score: 70 });
   assert.deepEqual(h, [{ date: TODAY, hrv: 50, score: 70 }]);
+});
+
+/* ---------- Weekly review ---------- */
+// 30 days of steady backfill (HRV ~60, RHR ~55), then 7 scored days ending today
+const weekOf = (f) => [
+  ...makeHistory(37).slice(0, 30).map(({ score, ...d }) => d),
+  ...Array.from({ length: 7 }, (_, i) => ({
+    date: shiftKey(TODAY, i - 6), hrv: 60, rhr: 55, sleepHours: 7.6, score: 72, ankleHip: 2,
+    blocksDone: 8, blocksTotal: 9, drillsDone: 5, directives: ["on-track"], ...f(i),
+  })),
+];
+
+test("thresholds: one config drives the directions", () => {
+  assert.equal(THRESHOLDS.ankleStop, 4);
+  assert.equal(THRESHOLDS.hrvStopZ, -1.5);
+});
+
+test("weekly review: waits for 3 check-ins", () => {
+  const r = weeklyReview(makeHistory(2), TODAY);
+  assert.equal(r.checkins, 2);
+  assert.equal(r.needed, 1);
+  assert.deepEqual(r.focus, []);
+});
+
+test("weekly review: clean week says repeat it", () => {
+  const r = weeklyReview(weekOf(() => ({})), TODAY);
+  assert.equal(r.checkins, 7);
+  assert.equal(r.score.avg, 72);
+  assert.deepEqual(r.days, { high: 0, balanced: 7, restore: 0 });
+  assert.equal(r.adherence.planPct, 89);
+  assert.equal(r.adherence.mobilityDays, 7);
+  assert.deepEqual(r.fired, [{ id: "on-track", count: 7, name: "Stay the course" }]);
+  assert.deepEqual(r.focus.map((f) => f.id), ["w-steady"]);
+});
+
+test("weekly review: low HRV, short sleep and stiff ankle each get a numbered focus", () => {
+  const r = weeklyReview(weekOf(() => ({ hrv: 52, sleepHours: 6.4, ankleHip: 3, drillsDone: 2 })), TODAY);
+  assert.equal(r.hrv.pct, 87);
+  const ids = r.focus.map((f) => f.id);
+  assert.equal(ids[0], "w-hrv");
+  assert.equal(r.focus[0].level, "stop");
+  assert.ok(r.focus[0].why.includes("52 ms"));
+  for (const id of ["w-sleep", "w-ankle", "w-mobility"]) assert.ok(ids.includes(id), id);
+  assert.ok(!ids.includes("w-steady"));
+  assert.equal(r.sleep.under7, 7);
+});
+
+test("weekly review: baseline is fixed at the start of the week", () => {
+  // A week of low HRV would drag a moving baseline down; this one must not move
+  const r = weeklyReview(weekOf(() => ({ hrv: 40 })), TODAY);
+  assert.ok(r.hrv.baseline >= 59 && r.hrv.baseline <= 61, `baseline ${r.hrv.baseline}`);
+});
+
+test("weekly review: compares with last week and spots an improving ankle", () => {
+  const prevWeek = Array.from({ length: 7 }, (_, i) => ({ date: shiftKey(TODAY, i - 13), score: 60, ankleHip: 4 }));
+  const h = weekOf(() => ({})).filter((d) => !prevWeek.some((p) => p.date === d.date));
+  const r = weeklyReview([...h, ...prevWeek], TODAY);
+  assert.equal(r.score.delta, 12);
+  assert.equal(r.ankle.delta, -2);
+  assert.ok(r.focus.some((f) => f.id === "w-ankle-up"));
+});
+
+test("weekly review: 4+ high days with good HRV says progress", () => {
+  const r = weeklyReview(weekOf((i) => ({ score: i < 5 ? 85 : 70, hrv: 63 })), TODAY);
+  assert.equal(r.days.high, 5);
+  assert.ok(r.focus.some((f) => f.id === "w-progress"));
 });
