@@ -24,6 +24,12 @@ Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
 - Mobility list always includes Knee-to-Wall Dynamic Pulses, 90/90 Hip Switches, World's Greatest Stretch and Cossack Squats.
 - Every direction states the action and the number that triggered it.
 
+## Reference
+
+- Mobility drills and dosing: @docs/knowledge/mobility-and-movement.md
+- Original scoring and schedule spec: @docs/knowledge/recovery-algorithm.md
+- Personal training context lives in `CLAUDE.local.md` (git-ignored, on the owner's machine only).
+
 ## Conventions
 
 - React + Tailwind + lucide-react + Recharts. Small components, no new dependencies without a reason.

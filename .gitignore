@@ -5,6 +5,7 @@ dist
 !.env.example
 .DS_Store
 *.log
-# Personal health exports never go in a public repo
+# Personal context and health exports never go in a public repo
+CLAUDE.local.md
 data/
 *.zip
