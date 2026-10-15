@@ -7,7 +7,7 @@ import {
   BedDouble, Footprints, ClipboardCheck, X, Zap, Check, BookOpen, Utensils,
   Target, AlertOctagon, SlidersHorizontal, CheckCircle2, RefreshCw,
 } from "lucide-react";
-import { planDay, parseSyncHash, upsertDay, dateKey } from "./engine.js";
+import { planDay, parseSyncHash, parseBackfillHash, mergeBackfill, upsertDay, dateKey } from "./engine.js";
 
 /* =========================================================================
    Storage (on this device only — wrapped so private mode never crashes)
@@ -454,11 +454,27 @@ export default function CHINHDashboard() {
   const day = useMemo(() => planDay({ checkin, history, today }), [checkin, history, today]);
   const { result, archetype, baselines, directives, schedule, drills } = day;
 
-  // Apple Health sync: the Shortcut opens this page with #hrv=…&rhr=…&sleep=…
+  const [notice, setNotice] = useState(null);
+
+  // Apple Health links from the Shortcuts:
+  //   backfill → #history=date,hrv,rhr,sleep;…   morning sync → #hrv=…&rhr=…&sleep=…
   useEffect(() => {
-    const synced = parseSyncHash(window.location.hash);
+    const hash = window.location.hash;
+    const clearHash = () => window.history.replaceState(null, "", window.location.pathname + window.location.search);
+
+    const backfill = parseBackfillHash(hash);
+    if (backfill) {
+      clearHash();
+      const past = backfill.filter((d) => d.date < today);
+      setHistory((h) => mergeBackfill(h, past));
+      const withHrv = past.filter((d) => Number.isFinite(d.hrv)).length;
+      setNotice(`Imported ${past.length} days from Apple Health (${withHrv} with HRV). Your baselines now use your own history.`);
+      return;
+    }
+
+    const synced = parseSyncHash(hash);
     if (!synced) return;
-    window.history.replaceState(null, "", window.location.pathname + window.location.search); // clear numbers from the address bar
+    clearHash(); // keep numbers out of the address bar and browser history
     const sync = { date: today, at: new Date().toISOString(), fields: Object.keys(synced) };
     setCheckin((c) => ({ ...c, ...synced }));
     setLastSync(sync);
@@ -493,7 +509,8 @@ export default function CHINHDashboard() {
   const longDate = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const shortDate = now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
   const syncedToday = lastSync?.date === today;
-  const checkedInToday = history.some((h) => h.date === today);
+  const checkedInToday = history.some((h) => h.date === today && Number.isFinite(h.score));
+  const hasCheckins = history.some((h) => Number.isFinite(h.score));
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
@@ -527,9 +544,16 @@ export default function CHINHDashboard() {
           </div>
         </header>
 
+        {notice && (
+          <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-emerald-300/20 bg-emerald-300/5 px-4 py-2.5 text-sm text-emerald-200" role="status">
+            <span>{notice}</span>
+            <button onClick={() => setNotice(null)} aria-label="Dismiss" className="text-emerald-300/70 hover:text-emerald-200"><X size={16} /></button>
+          </div>
+        )}
+
         {!checkedInToday && (
           <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-2.5 text-sm text-amber-200">
-            {history.length ? "You haven't checked in today. The plan below uses your last check-in." : "Showing example data. Run your Apple Health Shortcut or open the check-in to start."}
+            {hasCheckins ? "You haven't checked in today. The plan below uses your last check-in." : "No check-in yet today. Run your morning Shortcut or open the check-in to start."}
           </p>
         )}
 

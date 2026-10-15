@@ -55,7 +55,33 @@ export function parseSyncHash(hash) {
   return Object.keys(out).length ? out : null;
 }
 
+/* ---------- 1b. Backfill link ----------
+   The backfill Shortcut opens …/#history=2026-09-15,58,54,26640;2026-09-16,61,53,25920;…
+   Each row: date, HRV (ms), resting HR (bpm), sleep (hours, minutes or seconds).
+   Rows with a bad date are dropped; bad or zero values are left empty. */
+export function parseBackfillHash(hash) {
+  if (!hash || !hash.includes("history=")) return null;
+  const raw = new URLSearchParams(hash.replace(/^#/, "")).get("history") || "";
+  const days = raw.split(/[;\n]/).map((row) => {
+    const [date, hrv, rhr, sleep] = row.trim().split(",");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return null;
+    const parsed = parseSyncHash(`#hrv=${hrv ?? ""}&rhr=${rhr ?? ""}&sleep=${sleep ?? ""}`);
+    return parsed ? { date, ...parsed } : null;
+  }).filter(Boolean);
+  return days.length ? days : null;
+}
+
 /* ---------- 2. History ---------- */
+/* Backfilled days only fill gaps: a real check-in is never overwritten. */
+export function mergeBackfill(history, days) {
+  let out = history;
+  for (const d of days) {
+    const prev = out.find((h) => h.date === d.date) || {};
+    out = upsertDay(out, { ...d, ...prev, date: d.date, source: prev.source || "backfill" });
+  }
+  return out;
+}
+
 export function upsertDay(history, entry) {
   const rest = history.filter((h) => h.date !== entry.date);
   const prev = history.find((h) => h.date === entry.date) || {};

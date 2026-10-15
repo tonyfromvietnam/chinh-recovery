@@ -73,6 +73,47 @@ Shortcuts → **Automation** → **+** → **Alarm** → **Is Stopped** → choo
 
 Now turning off your alarm opens CHINH with sleep, HRV and resting HR filled in. You rate soreness and energy (about 10 seconds) and get the plan.
 
+## 4. Backfill your last 30 days (run once)
+
+Without history, CHINH needs 5 check-ins before it can compare you with yourself. This second Shortcut sends the last 30 days from Apple Health in one go, so your baselines are personal from day one. It only fills gaps and never overwrites a real check-in, so it's safe to run again.
+
+New Shortcut → name it **CHINH Backfill**:
+
+1. **Repeat** → **30** times. Everything below goes **inside** the Repeat until step 17.
+
+   **Work out the day and its time windows**
+
+2. **Date** → Current Date
+3. **Adjust Date** → **Subtract** `Repeat Index` **days** from Date
+4. **Adjust Date** → **Get Start of Day** of the result
+5. **Adjust Date** → **Add** **12 hours** → **Set Variable** `WindowEnd` *(midday on that day)*
+6. **Adjust Date** → **Subtract** **24 hours** from `WindowEnd` → **Set Variable** `WindowStart`
+7. **Adjust Date** → **Subtract** **18 hours** from `WindowEnd` → **Set Variable** `SleepStart` *(6 pm the evening before)*
+8. **Format Date** → `WindowEnd`, Date Format **Custom**: `yyyy-MM-dd`, Time Format **None** → **Set Variable** `Day`
+
+   **Read that day's numbers**
+
+9. **Find Health Samples** → Type **Heart Rate Variability**, filters: Start Date **is after** `WindowStart` and Start Date **is before** `WindowEnd` → **Get Details** **Value** → **Calculate Statistics** **Average** → **Round Number** **Ones Place** → **Set Variable** `HRV`
+10. **Find Health Samples** → Type **Resting Heart Rate**, same two date filters, Sort **Start Date**, **Latest First**, Limit **1** → **Get Details** **Value** → **Set Variable** `RHR`
+11. **Find Health Samples** → Type **Sleep Analysis**, filters: Start Date **is after** `SleepStart`, Start Date **is before** `WindowEnd`, Value **is not** **In Bed**, Value **is not** **Awake** → **Get Details** **Duration** → **Calculate Statistics** **Sum** → **Set Variable** `Sleep`
+
+    **Add one row**
+
+12. **Text** → `[Day],[HRV],[RHR],[Sleep]` *(commas between, no spaces)*
+13. **Add to Variable** → `Rows`
+14. **End Repeat**
+
+    **Send everything to CHINH**
+
+15. **Combine Text** → `Rows` with **Custom** separator `;`
+16. **Text** → `https://tonyfromvietnam.github.io/chinh-recovery/#history=[Combined Text]`
+17. **Open URLs**
+
+It takes 10–30 seconds. CHINH shows "Imported 30 days from Apple Health" and the recovery card switches to "Baseline: your last 30 days". Days with no data are skipped, so a few gaps are fine.
+
+**Test it without the Shortcut:**
+`https://tonyfromvietnam.github.io/chinh-recovery/#history=2026-10-13,58,54,7.4;2026-10-14,61,53,7.1`
+
 ## What CHINH does with it
 
 | Step | What happens |

@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parseSyncHash, computeBaselines, calculateRecovery, planDay, upsertDay, shiftKey, sleepDebt,
+  parseBackfillHash, mergeBackfill,
 } from "../src/engine.js";
 
 const TODAY = "2026-10-15";
@@ -80,6 +81,31 @@ test("directions: 3-day falling trend", () => {
 test("directions: clean day says stay the course", () => {
   const day = planDay({ checkin: base, history: makeHistory(12), today: TODAY });
   assert.ok(day.directives.every((d) => d.level === "go"));
+});
+
+test("backfill: parses rows, drops bad ones", () => {
+  const days = parseBackfillHash("#history=2026-10-13,58,54,26640;2026-10-14,61.2,0,444;bad,1,2,3;2026-10-12,0,0,0");
+  assert.deepEqual(days, [
+    { date: "2026-10-13", hrv: 58, rhr: 54, sleepHours: 7.4 },
+    { date: "2026-10-14", hrv: 61, sleepHours: 7.4 },
+  ]);
+  assert.equal(parseBackfillHash("#hrv=50"), null);
+});
+
+test("backfill: fills gaps, never overwrites a real check-in", () => {
+  const h = [{ date: "2026-10-14", hrv: 70, score: 80 }];
+  const merged = mergeBackfill(h, [{ date: "2026-10-14", hrv: 50, rhr: 52 }, { date: "2026-10-13", hrv: 58 }]);
+  assert.equal(merged.find((d) => d.date === "2026-10-14").hrv, 70);
+  assert.equal(merged.find((d) => d.date === "2026-10-14").rhr, 52);
+  assert.equal(merged.find((d) => d.date === "2026-10-13").source, "backfill");
+});
+
+test("backfill: 30 days makes baselines rolling immediately", () => {
+  const rows = Array.from({ length: 30 }, (_, i) => `${shiftKey(TODAY, -(30 - i))},${55 + (i % 5)},${53 + (i % 3)},7.3`).join(";");
+  const history = mergeBackfill([], parseBackfillHash(`#history=${rows}`));
+  const b = computeBaselines(history, TODAY, base);
+  assert.equal(b.source, "rolling");
+  assert.equal(b.days, 30);
 });
 
 test("history: upsert merges same day", () => {

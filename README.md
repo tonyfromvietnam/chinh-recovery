@@ -50,6 +50,7 @@ docs/                  Apple Health Shortcut guide
 
 - [x] Apple Health sync via Shortcut
 - [x] Rolling personal baselines and data-driven directions
+- [x] One-time 30-day backfill from Apple Health
 - [ ] Native iPhone app (Expo + HealthKit) for background sync and widgets
 - [ ] Sync history across devices (Supabase)
 - [ ] TypeScript migration
