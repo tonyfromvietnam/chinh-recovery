@@ -19,6 +19,8 @@ const KEYS = { history: "chinh-history", checkin: "chinh-checkin", done: (d) => 
 const load = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } };
 
+const shortDay = (key) => new Date(`${key}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+
 /* Example values shown until your first check-in */
 const DEFAULT_CHECKIN = {
   sleepHours: 7.2, sleepQuality: 7, hrv: 62, hrvBaseline: 66, rhr: 55, rhrBaseline: 54,
@@ -513,7 +515,7 @@ function CheckInModal({ initial, synced, history, today, onClose, onSubmit }) {
           <div>
             <Eyebrow>Morning check-in</Eyebrow>
             <h2 id="checkin-title" className="mt-1 font-display text-3xl font-semibold text-slate-100">
-              {synced ? "Health data in. Rate how you feel." : "How did you wake up?"}
+              {synced ? "Anything changed since last time?" : "How did you wake up?"}
             </h2>
           </div>
           <button onClick={onClose} aria-label="Close check-in" className="rounded-full p-2 text-slate-400 hover:bg-white/5 hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-cyan-300">
@@ -611,10 +613,18 @@ export default function CHINHDashboard() {
     if (!synced) return;
     clearHash(); // keep numbers out of the address bar and browser history
     const sync = { date: today, at: new Date().toISOString(), fields: Object.keys(synced) };
-    setCheckin((c) => ({ ...c, ...synced }));
     setLastSync(sync);
     save(KEYS.sync, sync);
-    setModalOpen(true);
+    // No form: check in straight away and carry over the last soreness, energy and sleep-quality ratings.
+    // "Update check-in" is there for days when something has changed.
+    const next = { ...checkin, ...synced };
+    commitCheckin(next);
+    const parts = [
+      synced.hrv != null && `HRV ${synced.hrv} ms`,
+      synced.rhr != null && `RHR ${synced.rhr} bpm`,
+      synced.sleepHours != null && `sleep ${synced.sleepHours} h`,
+    ].filter(Boolean).join(" · ");
+    setNotice(`Synced from Apple Health: ${parts}. Soreness, ankle and energy ratings carried over from ${next.ratedOn ? shortDay(next.ratedOn) : "your last check-in"}. Tap Update check-in if anything has changed.`);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => save(KEYS.checkin, checkin), [checkin]);
@@ -623,7 +633,7 @@ export default function CHINHDashboard() {
 
   const toggle = (id) => setDone((d) => ({ ...d, [id]: !d[id] }));
 
-  const handleSubmit = (next) => {
+  const commitCheckin = (next) => {
     const nextDay = planDay({ checkin: next, history, today });
     setCheckin(next);
     setHistory((h) => upsertDay(h, {
@@ -631,7 +641,13 @@ export default function CHINHDashboard() {
       upper: next.upper, lower: next.lower, ankleHip: next.ankleHip, energy: next.energy, score: nextDay.result.score,
       directives: nextDay.directives.map((d) => d.id),
     }));
+  };
+
+  // The form is now only for changing how you feel, so it stamps the ratings with today's date
+  const handleSubmit = (next) => {
+    commitCheckin({ ...next, ratedOn: today });
     setModalOpen(false);
+    setNotice(null);
   };
 
   const realDays = history.filter((h) => Number.isFinite(h.score) && h.date < today).slice(-6);
@@ -689,7 +705,7 @@ export default function CHINHDashboard() {
             </span>
             <button onClick={() => setModalOpen(true)}
               className="flex items-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20 focus-visible:ring-2 focus-visible:ring-cyan-300">
-              <ClipboardCheck size={17} /> {checkedInToday ? "Update check-in" : "Morning check-in"}
+              <ClipboardCheck size={17} /> {checkedInToday ? "Update check-in" : "Check in"}
             </button>
           </div>
         </header>
@@ -703,7 +719,7 @@ export default function CHINHDashboard() {
 
         {!checkedInToday && (
           <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-2.5 text-sm text-amber-200">
-            {hasCheckins ? "You haven't checked in today. The plan below uses your last check-in." : "No check-in yet today. Run your morning Shortcut or open the check-in to start."}
+            {hasCheckins ? "No sync yet today. The plan below uses your last check-in. Run your Health Sync Shortcut to update it." : "No data yet. Run your Health Sync Shortcut, or tap Check in to enter numbers by hand."}
           </p>
         )}
 

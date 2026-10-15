@@ -15,7 +15,7 @@ Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
 - Direction triggers live in `THRESHOLDS` in `src/engine.js`. Tune there, not inline.
 - `weeklyReview(history, today)` – last 7 days vs the 7 before, focus items for next week, and a count of which directions fired (the evidence for tuning `THRESHOLDS`).
 - `src/CHINHDashboard.jsx` – UI only. Calls `planDay({ checkin, history, today })` and renders the result.
-- Data arrives from an iOS Shortcut as `#hrv=…&rhr=…&sleep=…` (see `docs/APPLE_HEALTH_SHORTCUT.md`). History lives in `localStorage` on the device; each check-in also stores the direction ids that fired and how much of the plan and mobility list was ticked off.
+- Data arrives from an iOS Shortcut as `#hrv=…&rhr=…&sleep=…` (see `docs/APPLE_HEALTH_SHORTCUT.md`). A sync checks in straight away with no form: soreness, energy and sleep quality carry over from the last time they were rated (`ratedOn`); the check-in form is only for days something changed. History lives in `localStorage` on the device; each check-in also stores the direction ids that fired and how much of the plan and mobility list was ticked off.
 
 ## Rules the engine must keep
 
