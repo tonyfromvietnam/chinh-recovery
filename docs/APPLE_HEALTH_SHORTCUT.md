@@ -92,43 +92,54 @@ Zepp only writes to Health after it syncs with the strap, so open Zepp for about
 
 ## 5. Backfill your last 30 days (run once)
 
-Without history, CHINH needs 5 check-ins before it can compare you with yourself. This second Shortcut sends the last 30 days from Apple Health in one go, so your baselines are personal from day one. It only fills gaps and never overwrites a real check-in, so it's safe to run again.
+Without history, CHINH needs 5 check-ins before it can compare you with yourself. This second Shortcut sends the last 30 days from Apple Health in one go, so your baselines are personal from day one. It only fills gaps and never overwrites a real check-in, so it's safe to run again. If you're signed in to sync, the 30 days also upload to your database.
 
-New Shortcut → name it **CHINH Backfill**:
+**First, one setting:** 30 days is about 800 Health items, more than Shortcuts shares by default. Turn on **Settings → Apps → Shortcuts → Advanced → Allow Sharing Large Amounts of Data**. Without it the run stops with *"This action is trying to share 803 Health items, which is not allowed"*.
 
-1. **Repeat** → **30** times. Everything below goes **inside** the Repeat until step 14.
+New Shortcut → name it **BackFill**:
 
-   **Work out the day and its time windows**
+1. **Repeat** → **30** times. Everything down to step 14 goes **inside** the Repeat.
+
+   **Work out the day's time window**
 
 2. **Date** → Current Date
-3. **Adjust Date** → **Subtract** `Repeat Index` **days** from Date
-4. **Adjust Date** → **Get Start of Day** of the result
+3. **Adjust Date** → **Subtract** `Repeat Index` **days**
+4. **Adjust Date** → **Get Start of Day**
 5. **Adjust Date** → **Add** **12 hours** → **Set Variable** `WindowEnd` *(midday on that day)*
-6. **Adjust Date** → **Subtract** **24 hours** from `WindowEnd` → **Set Variable** `WindowStart`
-7. **Adjust Date** → **Subtract** **18 hours** from `WindowEnd` → **Set Variable** `SleepStart` *(6 pm the evening before)*
-8. **Format Date** → `WindowEnd`, Date Format **Custom**: `yyyy-MM-dd`, Time Format **None** → **Set Variable** `Day`
+6. **Adjust Date** → **Subtract** **24 hours** from `WindowEnd` → **Set Variable** `WindowStart` *(midday the day before)*
 
-   **Read that day's numbers.** Every Find gets **Source is Zepp**, and each Get Details goes directly under its Find.
+   **Read that day's numbers.** Each **Get Details** goes directly under its **Find** (tap the Find first), otherwise it reads the wrong input.
 
-9. **Find Health Samples** → Type **Heart Rate Variability**; filters: Start Date **is after** `WindowStart`, Start Date **is before** `WindowEnd`, **Source is Zepp** → **Get Details** **Value** → **Calculate Statistics** **Average** → **Round Number** **Integer** → **Set Variable** `HRV`
-10. **Find Health Samples** → Type **Resting Heart Rate**, the same three filters, Sort **Start Date**, **Latest First**, Limit **1** → **Get Details** **Value** → **Set Variable** `RHR`
-11. **Find Health Samples** → Type **Sleep**; filters: Start Date **is after** `SleepStart`, Start Date **is before** `WindowEnd`, **Source is Zepp**, Value **is not** **In Bed**, Value **is not** **Awake** → **Get Details** **Duration** → **Calculate Statistics** **Sum** → **Set Variable** `Sleep`
+   To put a variable into a date filter, **press and hold** the date slot → **Select Variable** → tap the matching **Set Variable** action. A plain tap only opens the date picker.
+
+7. **Find Health Samples**: Type **Heart Rate Variability** · Start Date **is between** `WindowStart` and `WindowEnd` · **Source is Zepp**
+   → **Get Details** **Value** → **Calculate Statistics** **Average** → **Round Number** **Integer** → **Set Variable** `HRV`
+8. **Find Health Samples**: Type **Resting Heart Rate** · the same two filters · Sort **Start Date**, **Latest First**, Limit **1**
+   → **Get Details** **Value** → **Set Variable** `RHR`
+9. **Find Health Samples**: Type **Sleep** · the same two filters · Value **is not In Bed** · Value **is not Awake**
+   → **Get Details** **Duration** → **Calculate Statistics** **Sum** → **Set Variable** `Sleep`
+
+   *(Midday to midday covers the whole night before, so sleep needs no window of its own.)*
 
     **Add one row**
 
-12. **Text** → `[Day],[HRV],[RHR],[Sleep]` *(commas between, no spaces)*
-13. **Add to Variable** → `Rows`
-14. **End Repeat**
+10. **Text**: `[WindowEnd],[HRV],[RHR],[Sleep]`. Insert all four as variables, commas between, no spaces.
+    The date can come out as `2026-10-16` or `16 Oct 2026 at 12:00`; CHINH reads both. If you'd like the short form, tap the WindowEnd chip → **Date** → **Custom** → `yyyy-MM-dd`.
+11. **Add to Variable** → `Rows`
+12. **End Repeat**
 
     **Send everything to CHINH**
 
-15. **Combine Text** → `Rows` with **Custom** separator `;`
-16. **Text** → `https://tonyfromvietnam.github.io/chinh-recovery/#history=[Combined Text]`
-17. **Open URLs**
+13. **Combine Text** → `Rows`, separator **Custom** `;`
+14. **URL Encode** → Combined Text. **Don't skip this:** dates with spaces make an invalid link, and Open URLs then fails silently.
+15. **Text** → `https://tonyfromvietnam.github.io/chinh-recovery/#history=[URL Encoded Text]`
+16. **Open URLs**
 
-It takes 10–30 seconds. CHINH shows "Imported 30 days from Apple Health", and the bottom of the recovery card switches to "Baseline: your last 30 days". Days with no data are skipped, so a few gaps are fine.
+It takes 10–30 seconds. CHINH shows **"Imported 30 days from Apple Health (N with HRV)"**, and the bottom of the recovery card switches to **"Baseline: your last 30 days"**. Days with no data are left empty, so a few gaps are fine.
 
-**Test it without the Shortcut:**
+**Check it before importing:** temporarily swap **Open URLs** for **Quick Look** and set Repeat to **2**. Each row should look like `16 Oct 2026 at 12:00,77,48,24039` (date, HRV, resting HR, sleep seconds).
+
+**Test the import without the Shortcut:**
 `https://tonyfromvietnam.github.io/chinh-recovery/#history=2026-10-13,58,54,7.4;2026-10-14,61,53,7.1`
 
 ## What CHINH does with it
@@ -152,6 +163,9 @@ It takes 10–30 seconds. CHINH shows "Imported 30 days from Apple Health", and 
 | Safari opens but nothing is filled in | Check the Text action: no spaces, and the HRV/RHR/Sleep chips were inserted as variables rather than typed. |
 | **Open App** doesn't list Zepp | Skip it. Open Zepp yourself before running the Shortcut. |
 | No "Start Date … hours" option | Use **1 day**. A daytime nap the day before then counts towards sleep; adjust the hours with Update check-in on those days. |
+| BackFill rows start with `12:00` or all show today's date | The date chip in the row Text is formatting the time, or a date that doesn't change each loop. Use the **WindowEnd** variable in the row (step 10). |
+| BackFill sleep empty in every row | Get Details under the sleep Find is reading the wrong input. Delete it and add it again directly under the Find. |
+| BackFill runs but nothing imports | Missing **URL Encode** (step 14), or the large-data setting is off. |
 | Test without the Shortcut | Open `https://tonyfromvietnam.github.io/chinh-recovery/#hrv=58&rhr=54&sleep=7.4`. |
 
 **Keep HRV from one source.** Baselines only make sense if every day's HRV comes from the same place, so keep **Source is Zepp** on and don't mix in values typed from another app.
