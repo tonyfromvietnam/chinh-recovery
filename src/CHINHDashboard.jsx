@@ -1,16 +1,17 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import {
   Moon, HeartPulse, Activity, Sun, Dumbbell, Brain, Wind, ShoppingCart,
   BedDouble, Footprints, ClipboardCheck, X, Zap, Check, BookOpen, Utensils,
-  Target, AlertOctagon, SlidersHorizontal, CheckCircle2, RefreshCw, CalendarRange,
+  Target, AlertOctagon, SlidersHorizontal, CheckCircle2, RefreshCw, CalendarRange, Cloud, CloudOff, LogOut, Mail,
 } from "lucide-react";
 import {
   planDay, parseSyncHash, parseBackfillHash, mergeBackfill, upsertDay, dateKey, weeklyReview,
-  getArchetype, MOBILITY_DAY_MIN_DRILLS,
+  getArchetype, MOBILITY_DAY_MIN_DRILLS, mergeHistories, changedDays, latestRatings,
 } from "./engine.js";
+import { supabase, pullDays, pushDays } from "./supabase.js";
 
 /* =========================================================================
    Storage (on this device only — wrapped so private mode never crashes)
@@ -467,6 +468,90 @@ function WeeklyReviewCard({ review }) {
 }
 
 /* =========================================================================
+   Cloud sync
+   ========================================================================= */
+function SyncChip({ cloud, signedIn, onClick }) {
+  if (cloud.state === "off") return null;
+  const label = !signedIn ? "Sync across devices"
+    : cloud.state === "syncing" ? "Syncing…"
+    : cloud.state === "error" ? "Sync error"
+    : cloud.at ? `Cloud · ${new Date(cloud.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : "Cloud";
+  const tone = cloud.state === "error" ? "bg-rose-400/10 text-rose-300"
+    : signedIn ? "bg-cyan-400/10 text-cyan-200" : "bg-white/5 text-slate-400 hover:text-slate-200";
+  const Icon = cloud.state === "error" ? CloudOff : Cloud;
+  return (
+    <button onClick={onClick} className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-[11px] transition focus-visible:ring-2 focus-visible:ring-cyan-300 ${tone}`}>
+      <Icon size={12} /> {label}
+    </button>
+  );
+}
+
+function SyncModal({ session, cloud, onClose, onSyncNow, onSignOut }) {
+  const [email, setEmail] = useState("");
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState(null);
+  const send = async (e) => {
+    e.preventDefault();
+    setError(null);
+    const { error: err } = await supabase.auth.signInWithOtp({
+      email, options: { emailRedirectTo: window.location.origin + window.location.pathname },
+    });
+    if (err) setError(err.message); else setSent(true);
+  };
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="sync-title">
+      <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md rounded-t-3xl border border-white/10 bg-slate-900 p-6 sm:rounded-3xl"
+        style={{ paddingBottom: "max(24px, env(safe-area-inset-bottom, 0px))" }}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <Eyebrow>Cloud sync</Eyebrow>
+            <h2 id="sync-title" className="mt-1 font-display text-2xl font-semibold text-slate-100">
+              {session ? "Synced across your devices" : "Keep your history everywhere"}
+            </h2>
+          </div>
+          <button onClick={onClose} aria-label="Close" className="rounded-full p-2 text-slate-400 hover:bg-white/5 hover:text-slate-100"><X size={20} /></button>
+        </div>
+
+        {session ? (
+          <div className="mt-5 space-y-4 text-sm text-slate-300">
+            <p>Signed in as <span className="font-mono text-slate-100">{session.user.email}</span>. Check-ins, ratings and plan progress save to your private database and appear on any device you sign in on.</p>
+            {cloud.state === "error" && <p className="rounded-lg bg-rose-400/10 px-3 py-2 font-mono text-xs text-rose-300">{cloud.message}</p>}
+            <div className="flex gap-2">
+              <button onClick={onSyncNow} className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 py-2.5 font-semibold text-cyan-200 hover:bg-cyan-400/20">
+                <RefreshCw size={15} /> Sync now
+              </button>
+              <button onClick={onSignOut} className="flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-2.5 text-slate-300 hover:bg-white/5">
+                <LogOut size={15} /> Sign out
+              </button>
+            </div>
+            <p className="font-mono text-[11px] text-slate-500">Signing out keeps the copy on this device.</p>
+          </div>
+        ) : sent ? (
+          <p className="mt-5 rounded-xl border border-emerald-300/20 bg-emerald-300/5 px-4 py-3 text-sm text-emerald-200">
+            Link sent to {email}. Open it on this device: it signs you in here, then uploads this device's history.
+          </p>
+        ) : (
+          <form onSubmit={send} className="mt-5 space-y-3">
+            <p className="text-sm text-slate-300">Sign in with an email link. Your history uploads to your private database, so your phone and desktop show the same data. No password.</p>
+            <label htmlFor="sync-email" className="sr-only">Email</label>
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 focus-within:border-cyan-400/60">
+              <Mail size={15} className="text-slate-500" />
+              <input id="sync-email" type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com" className="w-full bg-transparent py-2.5 text-slate-100 outline-none" />
+            </div>
+            {error && <p className="font-mono text-xs text-rose-300">{error}</p>}
+            <button type="submit" className="w-full rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-400 py-3 font-semibold text-slate-950 hover:brightness-110">
+              Email me a sign-in link
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================================
    Check-in modal
    ========================================================================= */
 function Slider({ id, label, value, min, max, step = 1, unit = "", onChange, hint }) {
@@ -587,6 +672,10 @@ export default function CHINHDashboard() {
   const [done, setDone] = useState(() => load(KEYS.done(today), {}));
   const [lastSync, setLastSync] = useState(() => load(KEYS.sync, null));
   const [modalOpen, setModalOpen] = useState(false);
+  const [syncOpen, setSyncOpen] = useState(false);
+  const [session, setSession] = useState(null);
+  const [cloud, setCloud] = useState({ state: supabase ? "idle" : "off" });
+  const syncedRef = useRef(null); // date → JSON of each day as the cloud last confirmed it
 
   const day = useMemo(() => planDay({ checkin, history, today }), [checkin, history, today]);
   const { result, archetype, baselines, directives, schedule, drills } = day;
@@ -631,7 +720,75 @@ export default function CHINHDashboard() {
   useEffect(() => save(KEYS.done(today), done), [done, today]);
   useEffect(() => save(KEYS.history, history), [history]);
 
-  const toggle = (id) => setDone((d) => ({ ...d, [id]: !d[id] }));
+  // Ticking a block also records today's plan completion for the weekly review. Written here, on the tap,
+  // rather than in an effect, so another device with no ticks can never overwrite these counts with zeros.
+  const toggle = (id) => {
+    const next = { ...done, [id]: !done[id] };
+    setDone(next);
+    if (!history.some((h) => h.date === today && Number.isFinite(h.score))) return;
+    setHistory((h) => upsertDay(h, {
+      date: today, blocksDone: schedule.filter((i) => next[i.id]).length, blocksTotal: schedule.length,
+      drillsDone: drills.filter((d) => next[d.id]).length, updatedAt: Date.now(),
+    }));
+  };
+
+  // ---- Cloud sync: pull on sign-in and whenever the app comes back to the foreground, push what changed
+  useEffect(() => {
+    if (!supabase) return;
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  const pull = useCallback(async () => {
+    if (!supabase || !session) return;
+    setCloud((c) => ({ ...c, state: "syncing" }));
+    try {
+      const remote = await pullDays();
+      syncedRef.current = new Map(remote.map((d) => [d.date, JSON.stringify(d)]));
+      setHistory((h) => {
+        const merged = mergeHistories(h, remote);
+        // Another device checked in more recently: show its ratings here too
+        const latest = (rows) => rows.filter((d) => Number.isFinite(d.score)).at(-1)?.date || "";
+        if (latest(merged) > latest(h)) setCheckin((c) => ({ ...c, ...latestRatings(merged) }));
+        return merged;
+      });
+      setCloud({ state: "synced", at: Date.now() });
+    } catch (e) {
+      setCloud({ state: "error", message: e.message });
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) { syncedRef.current = null; return; }
+    pull();
+    const onVisible = () => document.visibilityState === "visible" && pull();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [session, pull]);
+
+  useEffect(() => {
+    if (!session || !syncedRef.current) return;
+    const changed = changedDays(history, syncedRef.current);
+    if (!changed.length) return;
+    const t = setTimeout(async () => {
+      setCloud((c) => ({ ...c, state: "syncing" }));
+      try {
+        await pushDays(session.user.id, changed);
+        changed.forEach((d) => syncedRef.current?.set(d.date, JSON.stringify(d)));
+        setCloud({ state: "synced", at: Date.now() });
+      } catch (e) {
+        setCloud({ state: "error", message: e.message });
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [history, session]);
+
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setCloud({ state: "idle" });
+    setSyncOpen(false);
+  };
 
   const commitCheckin = (next) => {
     const nextDay = planDay({ checkin: next, history, today });
@@ -639,7 +796,7 @@ export default function CHINHDashboard() {
     setHistory((h) => upsertDay(h, {
       date: today, hrv: next.hrv, rhr: next.rhr, sleepHours: next.sleepHours, sleepQuality: next.sleepQuality,
       upper: next.upper, lower: next.lower, ankleHip: next.ankleHip, energy: next.energy, score: nextDay.result.score,
-      directives: nextDay.directives.map((d) => d.id),
+      directives: nextDay.directives.map((d) => d.id), updatedAt: Date.now(),
     }));
   };
 
@@ -664,18 +821,6 @@ export default function CHINHDashboard() {
   const checkedInToday = history.some((h) => h.date === today && Number.isFinite(h.score));
   const hasCheckins = history.some((h) => Number.isFinite(h.score));
 
-  // Keep today's plan completion in history so the weekly review can count it
-  const blocksDone = schedule.filter((i) => done[i.id]).length;
-  const drillsDone = drills.filter((d) => done[d.id]).length;
-  useEffect(() => {
-    if (!checkedInToday) return;
-    setHistory((h) => {
-      const t = h.find((d) => d.date === today);
-      if (t && t.blocksDone === blocksDone && t.blocksTotal === schedule.length && t.drillsDone === drillsDone) return h;
-      return upsertDay(h, { date: today, blocksDone, blocksTotal: schedule.length, drillsDone });
-    });
-  }, [checkedInToday, blocksDone, drillsDone, schedule.length, today]);
-
   const review = useMemo(() => weeklyReview(history, today), [history, today]);
 
   return (
@@ -697,6 +842,7 @@ export default function CHINHDashboard() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <SyncChip cloud={cloud} signedIn={!!session} onClick={() => setSyncOpen(true)} />
             <span className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-[11px] ${syncedToday ? "bg-emerald-400/10 text-emerald-300" : "bg-white/5 text-slate-400"}`}>
               <RefreshCw size={12} />
               {syncedToday
@@ -745,10 +891,15 @@ export default function CHINHDashboard() {
         </div>
 
         <p className="mt-6 text-center font-mono text-[11px] text-slate-500">
-          Your data stays in this browser on this device. Nothing is uploaded.
+          {session
+            ? "Synced to your private database. Only you can read it."
+            : "Your data stays in this browser on this device. Nothing is uploaded unless you turn on sync."}
         </p>
       </div>
 
+      {syncOpen && supabase && (
+        <SyncModal session={session} cloud={cloud} onClose={() => setSyncOpen(false)} onSyncNow={pull} onSignOut={signOut} />
+      )}
       {modalOpen && (
         <CheckInModal initial={checkin} synced={syncedToday ? lastSync : null} history={history} today={today}
           onClose={() => setModalOpen(false)} onSubmit={handleSubmit} />

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   parseSyncHash, computeBaselines, calculateRecovery, planDay, upsertDay, shiftKey, sleepDebt,
   parseBackfillHash, mergeBackfill, weeklyReview, THRESHOLDS,
+  mergeHistories, changedDays, latestRatings, normaliseDate,
 } from "../src/engine.js";
 
 const TODAY = "2026-10-15";
@@ -177,4 +178,50 @@ test("weekly review: 4+ high days with good HRV says progress", () => {
   const r = weeklyReview(weekOf((i) => ({ score: i < 5 ? 85 : 70, hrv: 63 })), TODAY);
   assert.equal(r.days.high, 5);
   assert.ok(r.focus.some((f) => f.id === "w-progress"));
+});
+
+/* ---------- Cloud sync ---------- */
+test("sync: newest write wins a clash, fields only one side has survive", () => {
+  const local = [{ date: "2026-10-15", score: 70, energy: 3, updatedAt: 100 }];
+  const remote = [{ date: "2026-10-15", score: 82, energy: 4, hrv: 78, updatedAt: 200 }];
+  assert.deepEqual(mergeHistories(local, remote), [{ date: "2026-10-15", score: 82, energy: 4, hrv: 78, updatedAt: 200 }]);
+  const newerLocal = [{ date: "2026-10-15", score: 60, updatedAt: 300 }];
+  assert.equal(mergeHistories(newerLocal, remote)[0].score, 60);
+  assert.equal(mergeHistories(newerLocal, remote)[0].hrv, 78);
+});
+
+test("sync: first upload keeps every local day, real check-ins beat backfill", () => {
+  const local = [
+    { date: "2026-10-13", hrv: 58, source: "backfill" },
+    { date: "2026-10-15", hrv: 78, score: 82 }, // check-in from before sync existed: no stamp
+  ];
+  const remote = [{ date: "2026-10-15", hrv: 60, source: "backfill" }, { date: "2026-10-14", hrv: 61 }];
+  const merged = mergeHistories(local, remote);
+  assert.deepEqual(merged.map((d) => d.date), ["2026-10-13", "2026-10-14", "2026-10-15"]);
+  assert.equal(merged[2].score, 82);
+  assert.equal(merged[2].hrv, 78);
+});
+
+test("sync: only changed days are uploaded", () => {
+  const h = [{ date: "2026-10-14", hrv: 61 }, { date: "2026-10-15", hrv: 78 }];
+  const synced = new Map([["2026-10-14", JSON.stringify(h[0])], ["2026-10-15", JSON.stringify({ date: "2026-10-15", hrv: 70 })]]);
+  assert.deepEqual(changedDays(h, synced).map((d) => d.date), ["2026-10-15"]);
+  assert.equal(changedDays(h, new Map()).length, 2);
+});
+
+test("sync: a second device picks up the newest check-in's ratings", () => {
+  const h = [{ date: "2026-10-14", score: 70, ankleHip: 4, energy: 2 }, { date: "2026-10-15", hrv: 60 }];
+  assert.deepEqual(latestRatings(h), { ankleHip: 4, energy: 2 });
+  assert.equal(latestRatings([{ date: "2026-10-15", hrv: 60 }]), null);
+});
+
+test("backfill: accepts the date formats Shortcuts actually writes", () => {
+  assert.equal(normaliseDate("2026-10-16"), "2026-10-16");
+  assert.equal(normaliseDate("16 Oct 2026 at 12:00"), "2026-10-16");
+  assert.equal(normaliseDate("1 October 2026"), "2026-10-01");
+  assert.equal(normaliseDate("9/10/2026, 12:00"), "2026-10-09");
+  assert.equal(normaliseDate("12:00"), null);
+  assert.equal(normaliseDate("bad"), null);
+  const days = parseBackfillHash("#history=16%20Oct%202026%20at%2012:00,77,48,;13 Oct 2026 at 12:00,73,,;12:00,1,2,3");
+  assert.deepEqual(days, [{ date: "2026-10-16", hrv: 77, rhr: 48 }, { date: "2026-10-13", hrv: 73 }]);
 });

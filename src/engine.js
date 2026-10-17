@@ -63,12 +63,29 @@ export function parseBackfillHash(hash) {
   if (!hash || !hash.includes("history=")) return null;
   const raw = new URLSearchParams(hash.replace(/^#/, "")).get("history") || "";
   const days = raw.split(/[;\n]/).map((row) => {
-    const [date, hrv, rhr, sleep] = row.trim().split(",");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return null;
+    const [rawDate, hrv, rhr, sleep] = row.trim().split(",");
+    const date = normaliseDate(rawDate);
+    if (!date) return null;
     const parsed = parseSyncHash(`#hrv=${hrv ?? ""}&rhr=${rhr ?? ""}&sleep=${sleep ?? ""}`);
     return parsed ? { date, ...parsed } : null;
   }).filter(Boolean);
   return days.length ? days : null;
+}
+
+/* Shortcuts often ignores the yyyy-MM-dd format and writes its own, so accept the common ones:
+   "2026-10-16", "16 Oct 2026", "16 Oct 2026 at 12:00", "16 October 2026" and UK "16/10/2026". */
+const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+export function normaliseDate(raw) {
+  const t = (raw || "").trim();
+  const p = (n) => String(n).padStart(2, "0");
+  const ok = (y, m, d) => (m >= 1 && m <= 12 && d >= 1 && d <= 31 ? `${y}-${p(m)}-${p(d)}` : null);
+  let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return ok(+m[1], +m[2], +m[3]);
+  m = t.match(/^(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\.?\s+(\d{4})/);
+  if (m && MONTHS[m[2].toLowerCase()]) return ok(+m[3], MONTHS[m[2].toLowerCase()], +m[1]);
+  m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return ok(+m[3], +m[2], +m[1]);
+  return null;
 }
 
 /* ---------- 2. History ---------- */
@@ -536,4 +553,37 @@ function weeklyFocus({ score, days, hrv, rhr, sleep, ankle, adherence, checkins 
       action: "Same structure next week." });
   }
   return f.sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]);
+}
+
+/* ---------- 10. Cloud sync (Supabase) ----------
+   The phone stays the source of truth offline; the cloud is a copy that lets other devices catch up.
+   Each day carries `updatedAt` (ms) from the device that last changed it, so the newest write wins.
+   Days without a stamp (backfill, data from before sync) count as oldest, and a real check-in
+   beats a backfilled day on a tie. Pure functions: the UI only moves rows in and out. */
+const stampOf = (d) => (Number.isFinite(d?.updatedAt) ? d.updatedAt : 0);
+const hasScore = (d) => Number.isFinite(d?.score);
+
+export function mergeHistories(local, remote) {
+  const byDate = new Map(remote.map((d) => [d.date, d]));
+  for (const l of local) {
+    const r = byDate.get(l.date);
+    if (!r) { byDate.set(l.date, l); continue; }
+    const localWins = stampOf(l) !== stampOf(r) ? stampOf(l) > stampOf(r) : hasScore(l) || !hasScore(r);
+    // Fields only one side has survive; the winner's fields overwrite the rest
+    byDate.set(l.date, localWins ? { ...r, ...l } : { ...l, ...r });
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/* Days in `history` that differ from the last copy the cloud confirmed (a Map of date → JSON). */
+export function changedDays(history, synced) {
+  return history.filter((d) => synced.get(d.date) !== JSON.stringify(d));
+}
+
+/* The ratings from the newest scored day, so a second device shows the same check-in. */
+const RATING_KEYS = ["sleepHours", "sleepQuality", "hrv", "rhr", "upper", "lower", "ankleHip", "energy"];
+export function latestRatings(history) {
+  const last = [...history].reverse().find(hasScore);
+  if (!last) return null;
+  return Object.fromEntries(RATING_KEYS.filter((k) => Number.isFinite(last[k])).map((k) => [k, last[k]]));
 }
