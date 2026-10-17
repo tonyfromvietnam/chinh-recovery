@@ -537,3 +537,36 @@ function weeklyFocus({ score, days, hrv, rhr, sleep, ankle, adherence, checkins 
   }
   return f.sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]);
 }
+
+/* ---------- 10. Cloud sync (Supabase) ----------
+   The phone stays the source of truth offline; the cloud is a copy that lets other devices catch up.
+   Each day carries `updatedAt` (ms) from the device that last changed it, so the newest write wins.
+   Days without a stamp (backfill, data from before sync) count as oldest, and a real check-in
+   beats a backfilled day on a tie. Pure functions: the UI only moves rows in and out. */
+const stampOf = (d) => (Number.isFinite(d?.updatedAt) ? d.updatedAt : 0);
+const hasScore = (d) => Number.isFinite(d?.score);
+
+export function mergeHistories(local, remote) {
+  const byDate = new Map(remote.map((d) => [d.date, d]));
+  for (const l of local) {
+    const r = byDate.get(l.date);
+    if (!r) { byDate.set(l.date, l); continue; }
+    const localWins = stampOf(l) !== stampOf(r) ? stampOf(l) > stampOf(r) : hasScore(l) || !hasScore(r);
+    // Fields only one side has survive; the winner's fields overwrite the rest
+    byDate.set(l.date, localWins ? { ...r, ...l } : { ...l, ...r });
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/* Days in `history` that differ from the last copy the cloud confirmed (a Map of date → JSON). */
+export function changedDays(history, synced) {
+  return history.filter((d) => synced.get(d.date) !== JSON.stringify(d));
+}
+
+/* The ratings from the newest scored day, so a second device shows the same check-in. */
+const RATING_KEYS = ["sleepHours", "sleepQuality", "hrv", "rhr", "upper", "lower", "ankleHip", "energy"];
+export function latestRatings(history) {
+  const last = [...history].reverse().find(hasScore);
+  if (!last) return null;
+  return Object.fromEntries(RATING_KEYS.filter((k) => Number.isFinite(last[k])).map((k) => [k, last[k]]));
+}
