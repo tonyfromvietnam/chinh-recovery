@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   parseSyncHash, computeBaselines, calculateRecovery, planDay, upsertDay, shiftKey, sleepDebt,
   parseBackfillHash, mergeBackfill, weeklyReview, THRESHOLDS,
-  mergeHistories, changedDays, latestRatings,
+  mergeHistories, changedDays, latestRatings, normaliseDate,
 } from "../src/engine.js";
 
 const TODAY = "2026-10-15";
@@ -213,4 +213,15 @@ test("sync: a second device picks up the newest check-in's ratings", () => {
   const h = [{ date: "2026-10-14", score: 70, ankleHip: 4, energy: 2 }, { date: "2026-10-15", hrv: 60 }];
   assert.deepEqual(latestRatings(h), { ankleHip: 4, energy: 2 });
   assert.equal(latestRatings([{ date: "2026-10-15", hrv: 60 }]), null);
+});
+
+test("backfill: accepts the date formats Shortcuts actually writes", () => {
+  assert.equal(normaliseDate("2026-10-16"), "2026-10-16");
+  assert.equal(normaliseDate("16 Oct 2026 at 12:00"), "2026-10-16");
+  assert.equal(normaliseDate("1 October 2026"), "2026-10-01");
+  assert.equal(normaliseDate("9/10/2026, 12:00"), "2026-10-09");
+  assert.equal(normaliseDate("12:00"), null);
+  assert.equal(normaliseDate("bad"), null);
+  const days = parseBackfillHash("#history=16%20Oct%202026%20at%2012:00,77,48,;13 Oct 2026 at 12:00,73,,;12:00,1,2,3");
+  assert.deepEqual(days, [{ date: "2026-10-16", hrv: 77, rhr: 48 }, { date: "2026-10-13", hrv: 73 }]);
 });

@@ -63,12 +63,29 @@ export function parseBackfillHash(hash) {
   if (!hash || !hash.includes("history=")) return null;
   const raw = new URLSearchParams(hash.replace(/^#/, "")).get("history") || "";
   const days = raw.split(/[;\n]/).map((row) => {
-    const [date, hrv, rhr, sleep] = row.trim().split(",");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return null;
+    const [rawDate, hrv, rhr, sleep] = row.trim().split(",");
+    const date = normaliseDate(rawDate);
+    if (!date) return null;
     const parsed = parseSyncHash(`#hrv=${hrv ?? ""}&rhr=${rhr ?? ""}&sleep=${sleep ?? ""}`);
     return parsed ? { date, ...parsed } : null;
   }).filter(Boolean);
   return days.length ? days : null;
+}
+
+/* Shortcuts often ignores the yyyy-MM-dd format and writes its own, so accept the common ones:
+   "2026-10-16", "16 Oct 2026", "16 Oct 2026 at 12:00", "16 October 2026" and UK "16/10/2026". */
+const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+export function normaliseDate(raw) {
+  const t = (raw || "").trim();
+  const p = (n) => String(n).padStart(2, "0");
+  const ok = (y, m, d) => (m >= 1 && m <= 12 && d >= 1 && d <= 31 ? `${y}-${p(m)}-${p(d)}` : null);
+  let m = t.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return ok(+m[1], +m[2], +m[3]);
+  m = t.match(/^(\d{1,2})\s+([A-Za-z]{3})[A-Za-z]*\.?\s+(\d{4})/);
+  if (m && MONTHS[m[2].toLowerCase()]) return ok(+m[3], MONTHS[m[2].toLowerCase()], +m[1]);
+  m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) return ok(+m[3], +m[2], +m[1]);
+  return null;
 }
 
 /* ---------- 2. History ---------- */
