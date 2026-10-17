@@ -19,6 +19,10 @@ iPhone (Shortcut) ──▶ CHINH ──▶ Supabase "days" table ◀── CHIN
 ## 2. Create the table
 **SQL Editor → New query**, paste the whole of [`supabase/schema.sql`](../supabase/schema.sql), then **Run**. You should see *Success. No rows returned*.
 
+**Live updates:** the end of the script also turns on Realtime for the table, so an open CHINH tab updates within a second of your phone saving. If you ran an older copy of the script, run the latest one again; it's safe to repeat. Check it under **Database → Publications → supabase_realtime**: `days` should be listed.
+
+**Check it's working:** **Table Editor → days** shows one row per day once you've signed in on the phone.
+
 ## 3. Allow sign-in links back to CHINH
 **Authentication → URL Configuration**
 - **Site URL:** `https://tonyfromvietnam.github.io/chinh-recovery/`
@@ -52,4 +56,5 @@ Each day carries the time it was last changed. If phone and desktop both changed
 | No "Sync across devices" button | The two variables aren't set, or the site hasn't been redeployed since (step 4). |
 | The email link opens CHINH but you're not signed in | Add the CHINH address to **Redirect URLs** (step 3). |
 | "Email rate limit exceeded" | Supabase's built-in email allows a few emails an hour. Wait and try again. |
+| Desktop only updates when you click back into it | Realtime isn't on for `days`. Run `schema.sql` again (step 2). |
 | Sync error mentioning "row-level security" | `schema.sql` didn't run fully. Run it again (it's safe to repeat). |
