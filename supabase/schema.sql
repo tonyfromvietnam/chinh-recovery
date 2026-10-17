@@ -27,3 +27,14 @@ create policy "Update own days" on public.days
 drop policy if exists "Delete own days" on public.days;
 create policy "Delete own days" on public.days
   for delete to authenticated using ((select auth.uid()) = user_id);
+
+-- Live updates: send changes on this table to signed-in devices (row-level security still applies)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'days'
+  ) then
+    alter publication supabase_realtime add table public.days;
+  end if;
+end $$;

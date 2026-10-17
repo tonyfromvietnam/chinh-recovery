@@ -746,13 +746,7 @@ export default function CHINHDashboard() {
     try {
       const remote = await pullDays();
       syncedRef.current = new Map(remote.map((d) => [d.date, JSON.stringify(d)]));
-      setHistory((h) => {
-        const merged = mergeHistories(h, remote);
-        // Another device checked in more recently: show its ratings here too
-        const latest = (rows) => rows.filter((d) => Number.isFinite(d.score)).at(-1)?.date || "";
-        if (latest(merged) > latest(h)) setCheckin((c) => ({ ...c, ...latestRatings(merged) }));
-        return merged;
-      });
+      setHistory((h) => mergeHistories(h, remote));
       setCloud({ state: "synced", at: Date.now() });
     } catch (e) {
       setCloud({ state: "error", message: e.message });
@@ -783,6 +777,31 @@ export default function CHINHDashboard() {
     }, 800);
     return () => clearTimeout(t);
   }, [history, session]);
+
+  // Live: another device's save arrives here within a second, while this tab is open
+  useEffect(() => {
+    if (!supabase || !session) return;
+    const channel = supabase
+      .channel(`days-${session.user.id}`)
+      .on("postgres_changes",
+        { event: "*", schema: "public", table: "days", filter: `user_id=eq.${session.user.id}` },
+        ({ new: row }) => {
+          if (!row?.data?.date) return; // deletes carry no data
+          syncedRef.current?.set(row.data.date, JSON.stringify(row.data));
+          setHistory((h) => mergeHistories(h, [row.data]));
+          setCloud({ state: "synced", at: Date.now() });
+        })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session]);
+
+  // The dashboard always shows the newest check-in in history, wherever it was made.
+  // Without this, a device that already had a check-in for the same day kept showing its own numbers.
+  useEffect(() => {
+    const latest = latestRatings(history);
+    if (!latest) return;
+    setCheckin((c) => (Object.entries(latest).every(([k, v]) => c[k] === v) ? c : { ...c, ...latest }));
+  }, [history]);
 
   const signOut = async () => {
     await supabase.auth.signOut();
