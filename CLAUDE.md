@@ -31,6 +31,7 @@ Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
 - Mobility drills and dosing: @docs/knowledge/mobility-and-movement.md
 - Original scoring and schedule spec: @docs/knowledge/recovery-algorithm.md
 - Feature research and roadmap (read before building new features): `docs/FEATURE_RESEARCH.md`
+- Personalisation plan (population defaults → values learned from the owner's data): `docs/PERSONALISATION.md`
 - Personal training context lives in `CLAUDE.local.md` (git-ignored, on the owner's machine only).
 
 ## Conventions
