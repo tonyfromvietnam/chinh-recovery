@@ -195,6 +195,63 @@ Ask questions over your own history in plain English: "Why was Tuesday low?", "A
 
 ---
 
+## Questions CHINH can answer
+
+Status against the code on `main` (18 Oct 2026). **Now** = answered today; **Build** = needs the numbered feature; **Wait** = needs weeks of data once built.
+
+### This morning
+| Question | Status | Answered by |
+|---|---|---|
+| How recovered am I? | Now | Score, archetype, HRV/RHR vs your 30-day normal |
+| Should I lift heavy, go light, or rest? | Now | Directions + rewritten training block |
+| Can I play football today? | Now | Ankle flare / RHR / HRV stop rules |
+| Am I getting ill? | Now (partly) | RHR +5 bpm rule; 2-day confirmation needs #3 |
+| How should I fit today around my meetings? | Build #1 | Calendar-aware plan |
+| Can I trust today's reading? | Build #3 | Data confidence |
+
+### Tonight
+| Question | Status | Answered by |
+|---|---|---|
+| Should I go to bed earlier? | Now (fixed 22:00) | Sleep-debt rule; a personal bedtime needs bed/wake times + #4 |
+| When is my last coffee / last meal? | Build (V1.2) | Cut-offs from bedtime, `FEATURE_RESEARCH.md` §5 |
+| How much water should I have drunk? | Build (V1.2) | Hydration formula |
+
+### This week
+| Question | Status | Answered by |
+|---|---|---|
+| Was this week better than last? | Now | Weekly review |
+| Do I need a deload? | Now | Weekly HRV −5 % / 3+ restoration days |
+| Did I actually do my mobility? | Now | Adherence (plan % and mobility days) |
+| Is my ankle getting better? | Now (stiffness rating) | Weekly review; objective cm/seconds need #8 |
+| Which directions fire too often? | Now | `fired` counts → tune `THRESHOLDS` |
+
+### About me (learned)
+| Question | Status | Answered by |
+|---|---|---|
+| How much sleep do I really need? | Build #4 · Wait ~3–4 wk | Sleep-need estimate |
+| Am I a morning or evening type? Is my weekend lie-in hurting me? | Build #5 · Wait 2 wk | Chronotype, social jetlag |
+| How long do I need to recover from football? | Build #6 · Wait ~6 matches | Recovery profile |
+| Does my score actually predict good sessions? Which input matters most for me? | Build #7 · Wait 20–30 sessions | Predictive check |
+| Is my fitness improving? | Build #10 · Wait ~6 wk | Baseline shift detection |
+| What am I low in? | Build #11 | Blood markers (+ NHS vitamin D advice now) |
+
+### Cause and effect
+| Question | Status | Answered by |
+|---|---|---|
+| Does late coffee / a late dinner / alcohol hurt my recovery? | Build #2 · Wait ~8 tagged days each | Tag comparison |
+| What actually works for me? | Build #9 · 2–4 wk per test | Personal experiments |
+| Why was Tuesday so low? | Build #2 now · #13 later | Tags explain the day; Ask CHINH answers in plain English |
+
+## Gaps found in the current code
+
+Small fixes worth making before the personal-learning features, because each one limits what CHINH can learn:
+
+1. **History is capped at 120 days** (`upsertDay` → `.slice(-120)`). Sleep-need, chronotype, experiments and seasonal patterns need longer; raise to ~730 days (about 1 KB a day, fine for `localStorage`).
+2. **Sleep quality is carried over.** After a no-form sync, 17.5 of the score's 35 sleep points come from the last time you *rated* sleep, possibly days ago. Either ask for one tap after each sync, or score sleep from duration + regularity until it's rated again.
+3. **HRV is a 24-hour average** including daytime readings (Shortcut: "last 1 day"). Restrict to overnight, or at least send the reading count, so #3 can judge it.
+4. **HRV baseline is computed on raw ms.** HRV is skewed, and ln(HRV) is the standard for baselines and z-scores. Switching changes scores slightly, so do it with a test and a note in the weekly review.
+5. **Sleep "last 1 day" can include yesterday's nap.** Bed/wake times (#4/#5) fix this: take only the main sleep block.
+
 ## Suggested order
 
 1. **This week:** #1 calendar, #2 evening check-out, #3 data confidence, plus bed/wake times in the Shortcut. These are the data foundations everything else learns from.
