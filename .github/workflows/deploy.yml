@@ -3,6 +3,7 @@ name: Test and deploy
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -11,7 +12,7 @@ permissions:
   id-token: write
 
 concurrency:
-  group: pages
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'pages' }}
   cancel-in-progress: true
 
 jobs:
@@ -30,12 +31,16 @@ jobs:
           # Both are public by design; leave them unset and the app stays local-only.
           VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      # Pull requests stop here: tests and build must pass, nothing is published
+      - if: github.event_name != 'pull_request'
+        uses: actions/configure-pages@v5
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
         with:
           path: dist
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
     environment:

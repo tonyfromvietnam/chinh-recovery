@@ -51,9 +51,15 @@ docs/                  Apple Health Shortcut guide
 - [x] Apple Health sync via Shortcut
 - [x] Rolling personal baselines and data-driven directions
 - [x] One-time 30-day backfill from Apple Health
-- [ ] Native iPhone app (Expo + HealthKit) for background sync and widgets
-- [ ] Sync history across devices (Supabase)
-- [ ] TypeScript migration
+- [x] Sync history across devices (Supabase)
+- [x] M0 Data fixes: 2 years of history, ln(HRV) baselines, overnight HRV, bed/wake times, stale-quality guard
+- [x] M1 Data confidence, ill / high-stress override, calendar-aware plan, evening check-out
+- [x] M2 Morning brief: train call, water, food, bedtime and cut-offs, daily focus, fact of the day
+- [x] M3 Session log, training load, 7-day HRV trend, train / cap / reduce / recover decision
+- [x] M4 Weekly ankle tests, left vs right
+- [x] M5 Learned sleep need, chronotype, football recovery, habit effects, score check, baseline shifts
+- [x] M6 Personal experiments
+- [ ] M7 Blood markers, Hevy import, Ask CHINH, native iPhone app (see `docs/TECH_SPEC.md`)
 
 ## Privacy
 

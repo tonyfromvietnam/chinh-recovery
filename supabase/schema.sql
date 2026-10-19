@@ -38,3 +38,24 @@ begin
     alter publication supabase_realtime add table public.days;
   end if;
 end $$;
+
+-- Profile (weight, wake times, weekly plan, active experiment): one row per user. Added with the morning brief.
+create table if not exists public.profile (
+  user_id    uuid        primary key default auth.uid() references auth.users (id) on delete cascade,
+  data       jsonb       not null,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.profile enable row level security;
+
+drop policy if exists "Read own profile" on public.profile;
+create policy "Read own profile" on public.profile
+  for select to authenticated using ((select auth.uid()) = user_id);
+
+drop policy if exists "Add own profile" on public.profile;
+create policy "Add own profile" on public.profile
+  for insert to authenticated with check ((select auth.uid()) = user_id);
+
+drop policy if exists "Update own profile" on public.profile;
+create policy "Update own profile" on public.profile
+  for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);

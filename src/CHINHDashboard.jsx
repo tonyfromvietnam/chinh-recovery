@@ -4,19 +4,34 @@ import {
 } from "recharts";
 import {
   Moon, HeartPulse, Activity, Sun, Dumbbell, Brain, Wind, ShoppingCart,
-  BedDouble, Footprints, ClipboardCheck, X, Zap, Check, BookOpen, Utensils,
-  Target, AlertOctagon, SlidersHorizontal, CheckCircle2, RefreshCw, CalendarRange, Cloud, CloudOff, LogOut, Mail,
+  BedDouble, Footprints, ClipboardCheck, X, Zap, BookOpen, Utensils,
+  Target, AlertOctagon, SlidersHorizontal, CheckCircle2, RefreshCw, CalendarRange, Cloud, CloudOff, LogOut, Mail, Settings, Info,
 } from "lucide-react";
 import {
   planDay, parseSyncHash, parseBackfillHash, mergeBackfill, upsertDay, dateKey, weeklyReview,
   getArchetype, MOBILITY_DAY_MIN_DRILLS, mergeHistories, changedDays, latestRatings,
+  eveningTags, learnProfile, spacingConflicts, LOAD,
 } from "./engine.js";
-import { supabase, pullDays, pushDays } from "./supabase.js";
+import { supabase, pullDays, pushDays, pullProfile, pushProfile } from "./supabase.js";
+import { Card, Eyebrow, MiniRing, Checkbox, Chips } from "./components/ui.jsx";
+import BriefCard, { BriefSetupCard } from "./components/BriefCard.jsx";
+import EveningCard from "./components/EveningCard.jsx";
+import SessionModal from "./components/SessionModal.jsx";
+import SettingsModal from "./components/SettingsModal.jsx";
+import LoadCard from "./components/LoadCard.jsx";
+import AnkleCard from "./components/AnkleCard.jsx";
+import InsightsCard from "./components/InsightsCard.jsx";
+import ExperimentsCard from "./components/ExperimentsCard.jsx";
 
 /* =========================================================================
    Storage (on this device only — wrapped so private mode never crashes)
    ========================================================================= */
-const KEYS = { history: "chinh-history", checkin: "chinh-checkin", done: (d) => `chinh-done-${d}`, sync: "chinh-last-sync" };
+const KEYS = {
+  history: "chinh-history", checkin: "chinh-checkin", done: (d) => `chinh-done-${d}`, sync: "chinh-last-sync",
+  profile: "chinh-profile", weather: "chinh-weather",
+};
+const LONDON = { lat: 51.51, lon: -0.13 };
+const EVENING_FROM_HOUR = 19;
 const load = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } };
 
@@ -51,13 +66,6 @@ const LEVEL_META = {
   go: { icon: CheckCircle2, color: "#22e58b", label: "Go" },
 };
 
-const Card = ({ className = "", children }) => (
-  <section className={`rounded-2xl border border-white/[0.07] bg-white/[0.035] backdrop-blur-xl ${className}`}>{children}</section>
-);
-const Eyebrow = ({ children }) => (
-  <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-slate-400">{children}</p>
-);
-
 function ScoreRing({ score, color, size = 220 }) {
   const stroke = 14, r = (size - stroke) / 2, circ = 2 * Math.PI * r;
   return (
@@ -76,36 +84,33 @@ function ScoreRing({ score, color, size = 220 }) {
   );
 }
 
-function MiniRing({ pct, color }) {
-  const r = 18, c = 2 * Math.PI * r;
-  return (
-    <svg viewBox="0 0 44 44" className="h-11 w-11 -rotate-90">
-      <circle cx="22" cy="22" r={r} fill="none" stroke="rgba(148,163,184,0.15)" strokeWidth="5" />
-      <circle cx="22" cy="22" r={r} fill="none" stroke={color} strokeWidth="5" strokeLinecap="round"
-        strokeDasharray={c} strokeDashoffset={c * (1 - pct)} style={{ transition: "stroke-dashoffset 500ms" }} />
-    </svg>
-  );
-}
-
-function Checkbox({ checked, onChange, color = "#22e58b", label }) {
-  return (
-    <button type="button" role="checkbox" aria-checked={checked} aria-label={label} onClick={onChange}
-      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-      style={{ borderColor: checked ? color : "rgba(148,163,184,0.4)", background: checked ? color : "transparent" }}>
-      {checked && <Check size={15} strokeWidth={3.5} color="#0b1220" />}
-    </button>
-  );
-}
-
 /* =========================================================================
    Panels
    ========================================================================= */
-function RecoveryCard({ result, archetype, baselines, dateLabel }) {
+const CONFIDENCE_TONE = { high: "#22e58b", medium: "#facc15", low: "#fb5a6e" };
+
+function ConfidenceBadge({ confidence }) {
+  const color = CONFIDENCE_TONE[confidence.level];
+  return (
+    <span className="group relative inline-flex items-center gap-1.5 font-mono text-[11px] text-slate-400" tabIndex={0}>
+      <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+      {confidence.level} confidence
+      <span className="pointer-events-none absolute right-0 top-5 z-20 hidden w-64 rounded-lg border border-white/10 bg-slate-950 p-2 text-[11px] normal-case text-slate-300 shadow-xl group-hover:block group-focus:block">
+        {confidence.reasons.join(" · ")}
+      </span>
+    </span>
+  );
+}
+
+function RecoveryCard({ result, archetype, baselines, dateLabel, confidence, baselineNights }) {
   return (
     <Card className="p-5 sm:p-6">
       <div className="flex items-center justify-between gap-3">
         <Eyebrow>Recovery score</Eyebrow>
-        <span className="font-mono text-[11px] text-slate-500">{dateLabel}</span>
+        <div className="flex items-center gap-3">
+          {confidence && <ConfidenceBadge confidence={confidence} />}
+          <span className="font-mono text-[11px] text-slate-500">{dateLabel}</span>
+        </div>
       </div>
       <div className="mt-4 flex flex-col items-center gap-5">
         <ScoreRing score={result.score} color={archetype.color} />
@@ -135,11 +140,22 @@ function RecoveryCard({ result, archetype, baselines, dateLabel }) {
           );
         })}
       </div>
+      {result.sleepQualityStale && (
+        <p className="mt-4 font-mono text-[11px] text-amber-200/80">Sleep scored on duration only: quality not rated today.</p>
+      )}
       <p className="mt-4 font-mono text-[11px] text-slate-500">
         {baselines.source === "rolling"
-          ? `Baseline: your last ${baselines.days} days (30-day rolling)`
+          ? `Baseline: your last ${baselines.days} days (30-day rolling, ln HRV)`
           : `Baseline: manual · ${baselines.daysNeeded} more check-in${baselines.daysNeeded === 1 ? "" : "s"} until it learns yours`}
       </p>
+      {baselineNights && !baselineNights.ready && (
+        <div className="mt-2">
+          <p className="font-mono text-[11px] text-slate-500">Learning your baseline: {baselineNights.nights}/{baselineNights.needed} nights</p>
+          <div className="mt-1 h-1 overflow-hidden rounded-full bg-slate-700/50">
+            <div className="h-full rounded-full bg-cyan-300/70" style={{ width: `${(baselineNights.nights / baselineNights.needed) * 100}%` }} />
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
@@ -249,7 +265,7 @@ function VitalsStrip({ c, result, baselines, sleepDebt }) {
   );
 }
 
-function ScheduleTimeline({ items, done, toggle, accent }) {
+function ScheduleTimeline({ items, done, toggle, accent, calendar }) {
   const completed = items.filter((i) => done[i.id]).length;
   const totalMin = items.reduce((s, i) => s + i.dur, 0);
   const fmtDur = (m) => (m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}` : `${m}m`);
@@ -259,7 +275,8 @@ function ScheduleTimeline({ items, done, toggle, accent }) {
         <div>
           <Eyebrow>Today's action plan</Eyebrow>
           <h2 className="mt-1 font-display text-2xl font-semibold text-slate-100">Hour-by-hour schedule</h2>
-          <p className="text-xs text-slate-400">{items.length} blocks · {fmtDur(totalMin)} planned</p>
+          <p className="text-xs text-slate-400">{items.length} blocks · {fmtDur(totalMin)} planned
+            {calendar?.busy?.length ? ` · fitted around ${calendar.busy.length} calendar block${calendar.busy.length === 1 ? "" : "s"}` : ""}</p>
         </div>
         <div className="flex items-center gap-3">
           <MiniRing pct={items.length ? completed / items.length : 0} color={accent} />
@@ -286,6 +303,12 @@ function ScheduleTimeline({ items, done, toggle, accent }) {
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <p className={`font-medium ${isDone ? "text-slate-500 line-through" : "text-slate-100"}`}>{item.title}</p>
                     <span className="rounded-md px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider" style={{ color: meta.color, background: `${meta.color}1a` }}>{fmtDur(item.dur)}</span>
+                    {item.movedFrom && (
+                      <span className="rounded-md bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
+                        moved from {item.movedFrom}{item.shortened ? ", shortened" : ""}
+                      </span>
+                    )}
+                    {item.fromCalendar && <span className="rounded-md bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">from your calendar</span>}
                   </div>
                   <p className={`mt-0.5 text-sm ${isDone ? "text-slate-600" : "text-slate-400"}`}>{item.detail}</p>
                 </div>
@@ -295,6 +318,9 @@ function ScheduleTimeline({ items, done, toggle, accent }) {
           );
         })}
       </ol>
+      {calendar?.dropped?.length > 0 && (
+        <p className="mt-3 text-xs text-amber-200/80">No room today for: {calendar.dropped.map((d) => d.title).join(", ")}.</p>
+      )}
     </Card>
   );
 }
@@ -583,10 +609,10 @@ function NumberField({ id, label, value, unit, onChange, synced }) {
   );
 }
 
-function CheckInModal({ initial, synced, history, today, onClose, onSubmit }) {
+function CheckInModal({ initial, synced, history, today, profile, onClose, onSubmit }) {
   const [f, setF] = useState(initial);
   const set = (k) => (v) => setF((p) => ({ ...p, [k]: v }));
-  const preview = planDay({ checkin: f, history, today });
+  const preview = planDay({ checkin: { ...f, ratedOn: today, sleepQualityRatedOn: today }, history, today, profile });
   const arch = preview.archetype;
   const isSynced = (k) => synced?.fields?.includes(k);
 
@@ -609,6 +635,12 @@ function CheckInModal({ initial, synced, history, today, onClose, onSubmit }) {
         </div>
 
         <div className="mt-6 space-y-6">
+          <fieldset>
+            <legend className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200"><AlertOctagon size={15} /> Today</legend>
+            <Chips label="How are you today?" value={f.override ?? null} onChange={set("override")}
+              options={[{ value: null, label: "Normal day" }, { value: "ill", label: "Feeling ill" }, { value: "stress", label: "High stress" }]} />
+            <p className="mt-2 text-xs text-slate-500">Ill or high stress makes today a recovery day and leaves it out of your baselines, so a cold can't distort your normal.</p>
+          </fieldset>
           <fieldset>
             <legend className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200"><Activity size={15} /> Soreness & stiffness</legend>
             <div className="space-y-4">
@@ -668,22 +700,82 @@ function CheckInModal({ initial, synced, history, today, onClose, onSubmit }) {
 export default function CHINHDashboard() {
   const today = dateKey();
   const [history, setHistory] = useState(() => load(KEYS.history, []));
-  const [checkin, setCheckin] = useState(() => ({ ...DEFAULT_CHECKIN, ...load(KEYS.checkin, {}) }));
+  // Per-day fields (calendar, override) live on the day record, never in the carried-over check-in
+  const [checkin, setCheckin] = useState(() => {
+    const { busy, fixtures, override, ...c } = { ...DEFAULT_CHECKIN, ...load(KEYS.checkin, {}) };
+    return c;
+  });
   const [done, setDone] = useState(() => load(KEYS.done(today), {}));
   const [lastSync, setLastSync] = useState(() => load(KEYS.sync, null));
+  const [profile, setProfileState] = useState(() => load(KEYS.profile, null));
+  const [maxTempC, setMaxTempC] = useState(() => { const w = load(KEYS.weather, null); return w?.date === today ? w.maxTempC : null; });
   const [modalOpen, setModalOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sessionOpen, setSessionOpen] = useState(false);
+  const [restedPrompt, setRestedPrompt] = useState(false);
   const [session, setSession] = useState(null);
   const [cloud, setCloud] = useState({ state: supabase ? "idle" : "off" });
   const syncedRef = useRef(null); // date → JSON of each day as the cloud last confirmed it
+  const profileSyncedRef = useRef(null); // JSON of the profile as the cloud last confirmed it
 
-  const day = useMemo(() => planDay({ checkin, history, today }), [checkin, history, today]);
+  const todayDay = useMemo(() => history.find((h) => h.date === today) || null, [history, today]);
+  const learned = useMemo(() => learnProfile(history, today), [history, today]);
+  const fullProfile = useMemo(() => (profile ? { ...profile, learned } : null), [profile, learned]);
+  const dayCheckin = useMemo(() => ({ ...checkin, override: todayDay?.override ?? null }), [checkin, todayDay]);
+  const busyToday = useMemo(() => todayDay?.busy ?? [], [todayDay]);
+  const fixturesToday = useMemo(() => todayDay?.fixtures ?? [], [todayDay]);
+
+  const day = useMemo(() => planDay({
+    checkin: dayCheckin, history, today, profile: fullProfile, busy: busyToday, fixtures: fixturesToday, maxTempC,
+  }), [dayCheckin, history, today, fullProfile, busyToday, fixturesToday, maxTempC]);
   const { result, archetype, baselines, directives, schedule, drills } = day;
 
   const [notice, setNotice] = useState(null);
 
+  const setProfile = (p) => {
+    const next = { ...p, updatedAt: Date.now() };
+    delete next.learned; // computed from history every time, never stored
+    setProfileState(next);
+  };
+  useEffect(() => { if (profile) save(KEYS.profile, profile); }, [profile]);
+
+  // Today's maximum temperature (Open-Meteo, no key) for the water target. Fails quietly.
+  useEffect(() => {
+    if (maxTempC != null) return;
+    const loc = profile?.location || LONDON;
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&daily=temperature_2m_max&timezone=Europe%2FLondon&forecast_days=1`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        const t = j?.daily?.temperature_2m_max?.[0];
+        if (Number.isFinite(t)) { setMaxTempC(t); save(KEYS.weather, { date: today, maxTempC: t }); }
+      })
+      .catch(() => {});
+  }, [today]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* Save today's check-in. `extra` holds per-day fields (calendar, override) that must not carry over. */
+  const commitCheckin = (next, extra = {}) => {
+    const override = "override" in extra ? extra.override : todayDay?.override ?? null;
+    const nextDay = planDay({
+      checkin: { ...next, override }, history, today, profile: fullProfile,
+      busy: extra.busy ?? busyToday, fixtures: extra.fixtures ?? fixturesToday, maxTempC,
+    });
+    setCheckin(next);
+    const fields = {
+      date: today, hrv: next.hrv, rhr: next.rhr, sleepHours: next.sleepHours, sleepQuality: next.sleepQuality,
+      upper: next.upper, lower: next.lower, ankleHip: next.ankleHip, energy: next.energy, score: nextDay.result.score,
+      hrvCount: next.hrvCount, hrvWindow: next.hrvWindow, bedTime: next.bedTime, wakeTime: next.wakeTime,
+      ratedOn: next.ratedOn, sleepQualityRatedOn: next.sleepQualityRatedOn,
+      confidence: nextDay.confidence.level, directives: nextDay.directives.map((d) => d.id), updatedAt: Date.now(), ...extra,
+    };
+    setHistory((h) => upsertDay(h, Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined))));
+  };
+
+  // Small patches to today's record: evening check-out, session, ankle test, experiment compliance
+  const patchToday = (patch) => setHistory((h) => upsertDay(h, { date: today, ...patch, updatedAt: Date.now() }));
+
   // Apple Health links from the Shortcuts:
-  //   backfill → #history=date,hrv,rhr,sleep;…   morning sync → #hrv=…&rhr=…&sleep=…
+  //   backfill → #history=date,hrv,rhr,sleep[,hrvn[,bed,wake]];…   morning sync → #hrv=…&rhr=…&sleep=…&hrvn=…&bed=…&busy=…
   useEffect(() => {
     const hash = window.location.hash;
     const clearHash = () => window.history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -701,24 +793,32 @@ export default function CHINHDashboard() {
     const synced = parseSyncHash(hash);
     if (!synced) return;
     clearHash(); // keep numbers out of the address bar and browser history
-    const sync = { date: today, at: new Date().toISOString(), fields: Object.keys(synced) };
+    const { busy, fixtures, ...measures } = synced;
+    const sync = { date: today, at: new Date().toISOString(), fields: Object.keys(measures) };
     setLastSync(sync);
     save(KEYS.sync, sync);
-    // No form: check in straight away and carry over the last soreness, energy and sleep-quality ratings.
-    // "Update check-in" is there for days when something has changed.
-    const next = { ...checkin, ...synced };
-    commitCheckin(next);
+    // No form: check in straight away and carry over the last soreness and energy ratings.
+    const next = { ...checkin, ...measures };
+    commitCheckin(next, { busy: busy ?? [], fixtures: fixtures ?? [] });
     const parts = [
-      synced.hrv != null && `HRV ${synced.hrv} ms`,
-      synced.rhr != null && `RHR ${synced.rhr} bpm`,
-      synced.sleepHours != null && `sleep ${synced.sleepHours} h`,
+      measures.hrv != null && `HRV ${measures.hrv} ms${measures.hrvCount != null ? ` (${measures.hrvCount} readings)` : ""}`,
+      measures.rhr != null && `RHR ${measures.rhr} bpm`,
+      measures.sleepHours != null && `sleep ${measures.sleepHours} h${measures.bedTime ? ` (${measures.bedTime}–${measures.wakeTime ?? "?"})` : ""}`,
+      busy?.length && `${busy.length} calendar block${busy.length === 1 ? "" : "s"}`,
+      fixtures?.length && "football fixture",
     ].filter(Boolean).join(" · ");
-    setNotice(`Synced from Apple Health: ${parts}. Soreness, ankle and energy ratings carried over from ${next.ratedOn ? shortDay(next.ratedOn) : "your last check-in"}. Tap Update check-in if anything has changed.`);
+    setNotice(`Synced from Apple Health: ${parts}. Soreness, ankle and energy carried over from ${next.ratedOn ? shortDay(next.ratedOn) : "your last check-in"}.`);
+    if ((next.sleepQualityRatedOn ?? next.ratedOn) !== today) setRestedPrompt(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => save(KEYS.checkin, checkin), [checkin]);
   useEffect(() => save(KEYS.done(today), done), [done, today]);
   useEffect(() => save(KEYS.history, history), [history]);
+
+  const rateRested = (q) => {
+    commitCheckin({ ...checkin, sleepQuality: q, sleepQualityRatedOn: today });
+    setRestedPrompt(false);
+  };
 
   // Ticking a block also records today's plan completion for the weekly review. Written here, on the tap,
   // rather than in an effect, so another device with no ticks can never overwrite these counts with zeros.
@@ -751,6 +851,13 @@ export default function CHINHDashboard() {
     } catch (e) {
       setCloud({ state: "error", message: e.message });
     }
+    try {
+      const remoteProfile = await pullProfile();
+      profileSyncedRef.current = remoteProfile ? JSON.stringify(remoteProfile) : "";
+      if (remoteProfile) setProfileState((p) => (!p || (remoteProfile.updatedAt ?? 0) > (p.updatedAt ?? 0) ? remoteProfile : p));
+    } catch {
+      profileSyncedRef.current = null; // no profile table yet (see docs/SUPABASE_SETUP.md); days still sync
+    }
   }, [session]);
 
   useEffect(() => {
@@ -778,6 +885,16 @@ export default function CHINHDashboard() {
     return () => clearTimeout(t);
   }, [history, session]);
 
+  useEffect(() => {
+    if (!session || !profile || profileSyncedRef.current == null) return;
+    const json = JSON.stringify(profile);
+    if (json === profileSyncedRef.current) return;
+    const t = setTimeout(() => {
+      pushProfile(session.user.id, profile).then(() => { profileSyncedRef.current = json; }).catch(() => {});
+    }, 800);
+    return () => clearTimeout(t);
+  }, [profile, session]);
+
   // Live: another device's save arrives here within a second, while this tab is open
   useEffect(() => {
     if (!supabase || !session) return;
@@ -796,7 +913,6 @@ export default function CHINHDashboard() {
   }, [session]);
 
   // The dashboard always shows the newest check-in in history, wherever it was made.
-  // Without this, a device that already had a check-in for the same day kept showing its own numbers.
   useEffect(() => {
     const latest = latestRatings(history);
     if (!latest) return;
@@ -809,29 +925,21 @@ export default function CHINHDashboard() {
     setSyncOpen(false);
   };
 
-  const commitCheckin = (next) => {
-    const nextDay = planDay({ checkin: next, history, today });
-    setCheckin(next);
-    setHistory((h) => upsertDay(h, {
-      date: today, hrv: next.hrv, rhr: next.rhr, sleepHours: next.sleepHours, sleepQuality: next.sleepQuality,
-      upper: next.upper, lower: next.lower, ankleHip: next.ankleHip, energy: next.energy, score: nextDay.result.score,
-      directives: nextDay.directives.map((d) => d.id), updatedAt: Date.now(),
-    }));
-  };
-
-  // The form is now only for changing how you feel, so it stamps the ratings with today's date
+  // The form is for changing how you feel, so it stamps the ratings (and sleep quality) with today's date
   const handleSubmit = (next) => {
-    commitCheckin({ ...next, ratedOn: today });
+    const { override, ...rest } = next;
+    commitCheckin({ ...rest, ratedOn: today, sleepQualityRatedOn: today }, { override: override ?? null });
     setModalOpen(false);
     setNotice(null);
+    setRestedPrompt(false);
   };
 
   const realDays = history.filter((h) => Number.isFinite(h.score) && h.date < today).slice(-6);
   const isExample = realDays.length < 2;
-  const weekday = (key) => new Date(`${key}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short" });
+  const weekdayLabel = (key) => new Date(`${key}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short" });
   const trend = isExample
     ? [...EXAMPLE_TREND.map((score, i) => ({ day: `-${6 - i}d`, score })), { day: "Today", score: result.score }]
-    : [...realDays.map((h) => ({ day: weekday(h.date), score: h.score })), { day: "Today", score: result.score }];
+    : [...realDays.map((h) => ({ day: weekdayLabel(h.date), score: h.score })), { day: "Today", score: result.score }];
 
   const now = new Date();
   const longDate = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -839,6 +947,9 @@ export default function CHINHDashboard() {
   const syncedToday = lastSync?.date === today;
   const checkedInToday = history.some((h) => h.date === today && Number.isFinite(h.score));
   const hasCheckins = history.some((h) => Number.isFinite(h.score));
+  const showEvening = now.getHours() >= EVENING_FROM_HOUR || !!todayDay?.evening;
+  const footballRecoveryH = learned.footballRecoveryH ?? LOAD.defaultFootballRecoveryH;
+  const conflicts = useMemo(() => spacingConflicts(profile, footballRecoveryH), [profile, footballRecoveryH]);
 
   const review = useMemo(() => weeklyReview(history, today), [history, today]);
 
@@ -868,6 +979,10 @@ export default function CHINHDashboard() {
                 ? `Apple Health · ${new Date(lastSync.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
                 : "Not synced today"}
             </span>
+            <button onClick={() => setSettingsOpen(true)} aria-label="Settings"
+              className="rounded-xl border border-white/10 p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-cyan-300">
+              <Settings size={17} />
+            </button>
             <button onClick={() => setModalOpen(true)}
               className="flex items-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20 focus-visible:ring-2 focus-visible:ring-cyan-300">
               <ClipboardCheck size={17} /> {checkedInToday ? "Update check-in" : "Check in"}
@@ -876,9 +991,21 @@ export default function CHINHDashboard() {
         </header>
 
         {notice && (
-          <div className="mt-4 flex items-start justify-between gap-3 rounded-xl border border-emerald-300/20 bg-emerald-300/5 px-4 py-2.5 text-sm text-emerald-200" role="status">
-            <span>{notice}</span>
-            <button onClick={() => setNotice(null)} aria-label="Dismiss" className="text-emerald-300/70 hover:text-emerald-200"><X size={16} /></button>
+          <div className="mt-4 rounded-xl border border-emerald-300/20 bg-emerald-300/5 px-4 py-2.5 text-sm text-emerald-200" role="status">
+            <div className="flex items-start justify-between gap-3">
+              <span>{notice}</span>
+              <button onClick={() => { setNotice(null); setRestedPrompt(false); }} aria-label="Dismiss" className="text-emerald-300/70 hover:text-emerald-200"><X size={16} /></button>
+            </div>
+            {restedPrompt && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-slate-200">How rested do you feel?</span>
+                {[["Poor", 3], ["OK", 6], ["Great", 9]].map(([label, q]) => (
+                  <button key={label} onClick={() => rateRested(q)}
+                    className="rounded-lg border border-emerald-300/30 px-3 py-1 text-emerald-100 hover:bg-emerald-300/10">{label}</button>
+                ))}
+                <span className="text-xs text-emerald-200/60">Until you answer, sleep is scored on duration only.</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -888,8 +1015,15 @@ export default function CHINHDashboard() {
           </p>
         )}
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
-          <RecoveryCard result={result} archetype={archetype} baselines={baselines} dateLabel={shortDate} />
+        <div className="mt-6">
+          {day.brief
+            ? <BriefCard brief={day.brief} archetype={archetype} result={result} onLogSession={() => setSessionOpen(true)} onOpenSettings={() => setSettingsOpen(true)} />
+            : <BriefSetupCard onOpenSettings={() => setSettingsOpen(true)} />}
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+          <RecoveryCard result={result} archetype={archetype} baselines={baselines} dateLabel={shortDate}
+            confidence={day.confidence} baselineNights={day.baselineNights} />
           <div className="flex min-w-0 flex-col gap-4">
             <DirectionsCard directives={directives} />
             <TrendCard data={trend} isExample={isExample} />
@@ -901,8 +1035,41 @@ export default function CHINHDashboard() {
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
-          <ScheduleTimeline items={schedule} done={done} toggle={toggle} accent={archetype.color} />
+          <ScheduleTimeline items={schedule} done={done} toggle={toggle} accent={archetype.color} calendar={day.calendar} />
           <MobilityPanel drills={drills} done={done} toggle={toggle} />
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          {showEvening && (
+            <EveningCard key={todayDay?.evening?.at ?? "new"} evening={todayDay?.evening ?? null} cutoffs={day.brief?.cutoffs ?? null}
+              onSave={(ev) => patchToday({ evening: { ...ev, tags: eveningTags(ev, day.brief?.cutoffs), at: new Date().toISOString() } })} />
+          )}
+          <ExperimentsCard active={profile?.experiment ?? null} today={today} history={history}
+            assignment={day.brief?.experiment ?? null} complied={todayDay?.experiment?.complied ?? null}
+            onStart={(id) => setProfile({ ...(profile || {}), experiment: { id, start: today } })}
+            onStop={() => setProfile({ ...(profile || {}), experiment: null })}
+            onComply={(v) => day.brief?.experiment && patchToday({ experiment: { ...day.brief.experiment, complied: v } })} />
+          {!showEvening && (
+            <Card className="p-5 sm:p-6">
+              <Eyebrow>Evening check-out</Eyebrow>
+              <p className="mt-2 flex items-start gap-2 text-sm text-slate-400">
+                <Info size={16} className="mt-0.5 shrink-0" />
+                Opens after {EVENING_FROM_HOUR}:00: stress, alcohol, last caffeine and last meal. Four taps that let CHINH learn what affects your recovery.
+              </p>
+            </Card>
+          )}
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <LoadCard load={day.load} freshness={day.freshness} conflicts={conflicts} />
+          <AnkleCard ankle={day.ankle} onSaveTest={(t) => {
+            patchToday({ ankleTest: t });
+            if (profile && profile.injuredSide !== t.injured) setProfile({ ...profile, injuredSide: t.injured });
+          }} />
+        </div>
+
+        <div className="mt-4">
+          <InsightsCard history={history} today={today} />
         </div>
 
         <div className="mt-4">
@@ -920,8 +1087,16 @@ export default function CHINHDashboard() {
         <SyncModal session={session} cloud={cloud} onClose={() => setSyncOpen(false)} onSyncNow={pull} onSignOut={signOut} />
       )}
       {modalOpen && (
-        <CheckInModal initial={checkin} synced={syncedToday ? lastSync : null} history={history} today={today}
+        <CheckInModal initial={dayCheckin} synced={syncedToday ? lastSync : null} history={history} today={today} profile={fullProfile}
           onClose={() => setModalOpen(false)} onSubmit={handleSubmit} />
+      )}
+      {settingsOpen && (
+        <SettingsModal profile={profile} footballRecoveryH={footballRecoveryH} onClose={() => setSettingsOpen(false)}
+          onSave={(p) => { setProfile({ ...(profile || {}), ...p }); setSettingsOpen(false); }} />
+      )}
+      {sessionOpen && (
+        <SessionModal planned={day.planned} existing={todayDay?.session ?? null} onClose={() => setSessionOpen(false)}
+          onSave={(s) => { patchToday({ session: s }); setSessionOpen(false); }} />
       )}
     </div>
   );
