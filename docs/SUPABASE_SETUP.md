@@ -23,6 +23,8 @@ iPhone (Shortcut) ──▶ CHINH ──▶ Supabase "days" table ◀── CHIN
 
 **Check it's working:** **Table Editor → days** shows one row per day once you've signed in on the phone.
 
+**Profile table (added with the morning brief):** the same script also creates `profile`: one row with your weight, wake times, weekly plan and active experiment. If you set up Supabase before this was added, run the script again. Until you do, days still sync and the profile stays on each device.
+
 ## 3. Allow sign-in links back to CHINH
 **Authentication → URL Configuration**
 - **Site URL:** `https://tonyfromvietnam.github.io/chinh-recovery/`

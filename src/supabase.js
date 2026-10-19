@@ -21,6 +21,20 @@ export async function pullDays() {
   return data.map((r) => r.data);
 }
 
+/* Profile (weight, wake times, weekly plan, experiment): one row per user. Needs the `profile` table from
+   supabase/schema.sql; if it isn't there yet, sync carries on with days only. */
+export async function pullProfile() {
+  const { data, error } = await supabase.from("profile").select("data").maybeSingle();
+  if (error) throw error;
+  return data?.data ?? null;
+}
+
+export async function pushProfile(userId, profile) {
+  const { error } = await supabase.from("profile")
+    .upsert({ user_id: userId, data: profile, updated_at: new Date().toISOString() }, { onConflict: "user_id" });
+  if (error) throw error;
+}
+
 export async function pushDays(userId, days) {
   if (!days.length) return;
   const rows = days.map((d) => ({ user_id: userId, date: d.date, data: d, updated_at: new Date().toISOString() }));

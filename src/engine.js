@@ -6,23 +6,33 @@
    → history (on device) → rolling baselines → score → archetype → directions + plan
    ========================================================================= */
 
+import { clamp01, round1, dateKey, shiftKey, isNum, isHHMM, isWeekend, toMin, fromMin } from "./engine/util.js";
+import { dataConfidence, OVERRIDE_LABELS } from "./engine/confidence.js";
+import { parseBusy, parseFixtures, fitScheduleToCalendar } from "./engine/calendar.js";
+import {
+  plannedSession, wakeFor, bodyWeight, avgBedtime7, targetBedtime, eveningCutoffs, waterTarget, nutritionTargets,
+  dayTypeFor, dailyFocus, factContext, factOfTheDay, applyBriefToSchedule, SESSION_DEFAULTS, isHardSession,
+} from "./engine/brief.js";
+import { hrvTrend, rhrRun, loadSummary, freshness, trainingDecision, applyDecision, LOAD } from "./engine/load.js";
+import { ankleSummary, anklePhysioDirective } from "./engine/ankle.js";
+import { baselineNights, chronotypeShiftMin } from "./engine/learning.js";
+import { experimentById, assignArm } from "./engine/experiments.js";
+
+export { dateKey, shiftKey };
+export * from "./engine/util.js";
+export * from "./engine/confidence.js";
+export * from "./engine/calendar.js";
+export * from "./engine/evening.js";
+export * from "./engine/brief.js";
+export * from "./engine/load.js";
+export * from "./engine/ankle.js";
+export * from "./engine/learning.js";
+export * from "./engine/experiments.js";
+
 export const SLEEP_TARGET_H = 8;
 export const BASELINE_WINDOW_DAYS = 30;
 export const BASELINE_MIN_DAYS = 5;
-
-const clamp01 = (v) => Math.max(0, Math.min(1, v));
-const round1 = (v) => Math.round(v * 10) / 10;
-
-/* ---------- Dates ---------- */
-export function dateKey(d = new Date()) {
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-
-export function shiftKey(key, days) {
-  const [y, m, d] = key.split("-").map(Number);
-  return dateKey(new Date(y, m - 1, d + days));
-}
+export const HISTORY_MAX_DAYS = 730; // two years: enough for sleep need, chronotype, seasons and experiments
 
 /* ---------- 1. Apple Health sync link ----------
    The Shortcut opens …/#hrv=58&rhr=54&sleep=26640
@@ -52,7 +62,29 @@ export function parseSyncHash(hash) {
   const sq = num("sq");
   if (sq != null && sq >= 1 && sq <= 10) out.sleepQuality = Math.round(sq);
 
+  // v2: how HRV was measured, and the main sleep block
+  const hrvn = num("hrvn");
+  if (hrvn != null && hrvn >= 0 && hrvn <= 50) out.hrvCount = Math.round(hrvn);
+  if (params.has("hw")) out.hrvWindow = params.get("hw") === "o" ? "overnight" : "24h";
+  for (const [k, field] of [["bed", "bedTime"], ["wake", "wakeTime"]]) {
+    const m = parseClockParam(params.get(k));
+    if (m) out[field] = m;
+  }
+  // v2: calendar busy blocks (times only) and a football fixture
+  const busy = parseBusy(params.get("busy"));
+  if (busy.length) out.busy = busy;
+  const fixtures = parseFixtures(params.get("fb"));
+  if (fixtures.length) out.fixtures = fixtures;
+
   return Object.keys(out).length ? out : null;
+}
+
+/* "23:12", "2312" or "23.12" → "23:12" */
+function parseClockParam(raw) {
+  const m = String(raw ?? "").trim().replace(".", ":").match(/^(\d{1,2}):?(\d{2})$/);
+  if (!m) return null;
+  const s = `${m[1].padStart(2, "0")}:${m[2]}`;
+  return isHHMM(s) ? s : null;
 }
 
 /* ---------- 1b. Backfill link ----------
@@ -62,12 +94,16 @@ export function parseSyncHash(hash) {
 export function parseBackfillHash(hash) {
   if (!hash || !hash.includes("history=")) return null;
   const raw = new URLSearchParams(hash.replace(/^#/, "")).get("history") || "";
+  // Rows: date,hrv,rhr,sleep  [,hrvCount]  [,bed,wake]. The 5+ column BackFill reads HRV overnight only.
   const days = raw.split(/[;\n]/).map((row) => {
-    const [rawDate, hrv, rhr, sleep] = row.trim().split(",");
+    const [rawDate, hrv, rhr, sleep, hrvn, bed, wake] = row.trim().split(",");
     const date = normaliseDate(rawDate);
     if (!date) return null;
-    const parsed = parseSyncHash(`#hrv=${hrv ?? ""}&rhr=${rhr ?? ""}&sleep=${sleep ?? ""}`);
-    return parsed ? { date, ...parsed } : null;
+    const v2 = hrvn !== undefined ? `&hrvn=${hrvn}&hw=o&bed=${bed ?? ""}&wake=${wake ?? ""}` : "";
+    const parsed = parseSyncHash(`#hrv=${hrv ?? ""}&rhr=${rhr ?? ""}&sleep=${sleep ?? ""}${v2}`);
+    if (!parsed) return null;
+    if (!isNum(parsed.hrv)) { delete parsed.hrvWindow; delete parsed.hrvCount; }
+    return Object.keys(parsed).some((k) => ["hrv", "rhr", "sleepHours"].includes(k)) ? { date, ...parsed } : null;
   }).filter(Boolean);
   return days.length ? days : null;
 }
@@ -102,28 +138,33 @@ export function mergeBackfill(history, days) {
 export function upsertDay(history, entry) {
   const rest = history.filter((h) => h.date !== entry.date);
   const prev = history.find((h) => h.date === entry.date) || {};
-  return [...rest, { ...prev, ...entry }].sort((a, b) => a.date.localeCompare(b.date)).slice(-120);
+  return [...rest, { ...prev, ...entry }].sort((a, b) => a.date.localeCompare(b.date)).slice(-HISTORY_MAX_DAYS);
 }
 
 /* ---------- 3. Rolling baselines ----------
-   Mean and spread of the last 30 days, excluding today.
-   Until 5 days exist, falls back to the manual baselines from the check-in. */
+   Mean and spread of the last 30 days, excluding today and days marked ill / high stress.
+   HRV is skewed, so its baseline is computed on ln(HRV): `hrv.mean` is the geometric mean (for display),
+   `hrv.lnMean` / `hrv.lnSd` drive the z-score. Until 5 days exist, falls back to the manual baselines. */
 const mean = (xs) => xs.reduce((s, x) => s + x, 0) / xs.length;
 const stdev = (xs) => {
   if (xs.length < 2) return 0;
   const m = mean(xs);
   return Math.sqrt(xs.reduce((s, x) => s + (x - m) ** 2, 0) / (xs.length - 1));
 };
+export const LN_SD_FLOOR = 0.05;
+export const LN_SD_MANUAL = 0.1;
 
-export function computeBaselines(history, today, manual) {
+export function computeBaselines(history, today, manual = {}) {
   const from = shiftKey(today, -BASELINE_WINDOW_DAYS);
-  const past = history.filter((h) => h.date < today && h.date >= from);
-  const hrvs = past.map((h) => h.hrv).filter(Number.isFinite);
+  const past = history.filter((h) => h.date < today && h.date >= from && !h.override);
+  const lnHrvs = past.map((h) => h.hrv).filter((v) => Number.isFinite(v) && v > 0).map(Math.log);
   const rhrs = past.map((h) => h.rhr).filter(Number.isFinite);
 
-  const hrvRolling = hrvs.length >= BASELINE_MIN_DAYS;
+  const hrvRolling = lnHrvs.length >= BASELINE_MIN_DAYS;
   const rhrRolling = rhrs.length >= BASELINE_MIN_DAYS;
-  const hrvMean = hrvRolling ? mean(hrvs) : manual.hrvBaseline;
+  const lnMean = hrvRolling ? mean(lnHrvs) : Number.isFinite(manual.hrvBaseline) && manual.hrvBaseline > 0 ? Math.log(manual.hrvBaseline) : NaN;
+  const lnSd = hrvRolling ? Math.max(stdev(lnHrvs), LN_SD_FLOOR) : LN_SD_MANUAL;
+  const hrvMean = Math.exp(lnMean);
   const rhrMean = rhrRolling ? mean(rhrs) : manual.rhrBaseline;
 
   // The 2 nights before today; sleepDebt() adds last night to make 3
@@ -133,25 +174,36 @@ export function computeBaselines(history, today, manual) {
 
   return {
     source: hrvRolling ? "rolling" : "manual",
-    days: hrvs.length,
-    daysNeeded: Math.max(0, BASELINE_MIN_DAYS - hrvs.length),
-    hrv: { mean: hrvMean, sd: hrvRolling ? Math.max(stdev(hrvs), hrvMean * 0.05) : hrvMean * 0.1 },
+    days: lnHrvs.length,
+    daysNeeded: Math.max(0, BASELINE_MIN_DAYS - lnHrvs.length),
+    hrv: { mean: hrvMean, lnMean, lnSd, sd: hrvMean * lnSd },
     rhr: { mean: rhrMean, sd: rhrRolling ? Math.max(stdev(rhrs), 1.5) : 3 },
     recentSleep,
   };
 }
 
-export function sleepDebt(todaySleep, recentSleep) {
-  return round1([todaySleep, ...recentSleep].reduce((s, h) => s + Math.max(0, SLEEP_TARGET_H - h), 0));
+export function sleepDebt(todaySleep, recentSleep, needH = SLEEP_TARGET_H) {
+  return round1([todaySleep, ...recentSleep].filter(Number.isFinite).reduce((s, h) => s + Math.max(0, needH - h), 0));
+}
+
+/* Sleep quality is stale when it was last actually rated on an earlier day (a no-form sync carried it over) */
+export function sleepQualityStale(c, today) {
+  const rated = c.sleepQualityRatedOn ?? c.ratedOn;
+  return !!(today && rated && rated !== today);
 }
 
 /* ---------- 4. Recovery score ----------
    Sleep 35% · HRV & RHR 35% · Soreness 20% · Mental energy 10%
-   HRV and RHR are scored as distance from YOUR baseline (z-score), not fixed numbers. */
-export function calculateRecovery(c, b) {
-  const sleep = clamp01(c.sleepHours / SLEEP_TARGET_H) * 0.5 + (c.sleepQuality / 10) * 0.5;
+   HRV and RHR are scored as distance from YOUR baseline (z-score), not fixed numbers.
+   opts.today lets a stale sleep-quality rating fall back to duration only (still 35 % of the score);
+   opts.sleepNeedH uses your learned sleep need instead of the 8 h default. */
+export function calculateRecovery(c, b, opts = {}) {
+  const need = Number.isFinite(opts.sleepNeedH) ? opts.sleepNeedH : SLEEP_TARGET_H;
+  const duration = clamp01(c.sleepHours / need);
+  const stale = sleepQualityStale(c, opts.today);
+  const sleep = stale || !Number.isFinite(c.sleepQuality) ? duration : duration * 0.5 + (c.sleepQuality / 10) * 0.5;
 
-  const hrvZ = (c.hrv - b.hrv.mean) / b.hrv.sd; // higher is better
+  const hrvZ = c.hrv > 0 && Number.isFinite(b.hrv.lnMean) ? (Math.log(c.hrv) - b.hrv.lnMean) / b.hrv.lnSd : 0; // higher is better
   const rhrZ = (c.rhr - b.rhr.mean) / b.rhr.sd; // lower is better
   const hrvScore = clamp01((hrvZ + 1.5) / 2.5); // −1.5 SD → 0, +1 SD → 1
   const rhrScore = clamp01((1.5 - rhrZ) / 2.5);
@@ -171,6 +223,7 @@ export function calculateRecovery(c, b) {
   return {
     score: Math.round(parts.reduce((s, p) => s + p.points, 0)),
     parts,
+    sleepQualityStale: stale,
     hrvZ: round1(hrvZ),
     rhrDelta: Math.round(c.rhr - b.rhr.mean),
     hrvPct: Math.round((c.hrv / b.hrv.mean) * 100),
@@ -197,7 +250,8 @@ const LEVEL_ORDER = { stop: 0, adjust: 1, go: 2 };
 export const THRESHOLDS = {
   hrvStopZ: -1.5, // HRV this many SD under normal → no intensity
   hrvAdjustZ: -1, // → cap at RPE 7
-  rhrStopDelta: 5, // bpm over normal → possible illness
+  rhrStopDelta: 5, // bpm over normal → possible illness…
+  rhrConfirmDays: 2, // …but only a stop once it's lasted this many mornings
   rhrAdjustDelta: 3, // → hydrate early
   sleepDebtH: 2, // hours owed across 3 nights
   shortSleepH: 6, // last night under this → NSDR
@@ -224,6 +278,12 @@ export const DIRECTIVE_NAMES = {
   "trend-down": "Plan a lighter week",
   push: "Green light: push",
   "on-track": "Stay the course",
+  override: "Recover (ill / high stress)",
+  "hrv-trend": "7-day HRV below range",
+  "load-spike": "Training load spike",
+  spacing: "Football tomorrow: legs light",
+  "spacing-recovery": "Still recovering from football",
+  "ankle-physio": "Book a physio check",
 };
 
 export function generateDirectives({ c, result, baselines, history, today, archetypeId }) {
@@ -244,9 +304,17 @@ export function generateDirectives({ c, result, baselines, history, today, arche
       action: "Keep the session, drop the top sets, stop 3 reps short of failure." });
   }
   if (result.rhrDelta >= T.rhrStopDelta) {
-    d.push({ id: "rhr-high", level: "stop", title: "Resting heart rate is elevated",
-      why: `${c.rhr} bpm, ${result.rhrDelta} above your ${rhrBase} bpm normal.`,
-      action: "Possible illness or dehydration. 750 ml water before noon, skip football, re-check tomorrow." });
+    // One raised morning is often dehydration or a late meal; two in a row is the illness signal
+    const run = rhrRun(history.filter((h) => h.date < today), today, baselines.rhr.mean, T.rhrStopDelta, c.rhr);
+    if (run >= T.rhrConfirmDays) {
+      d.push({ id: "rhr-high", level: "stop", title: "Resting heart rate is elevated",
+        why: `${c.rhr} bpm, ${result.rhrDelta} above your ${rhrBase} bpm normal, ${run} mornings running.`,
+        action: "Possible illness or dehydration. 750 ml water before noon, skip football, re-check tomorrow." });
+    } else {
+      d.push({ id: "rhr-high", level: "adjust", title: "Resting HR up: re-check tomorrow",
+        why: `${c.rhr} bpm, ${result.rhrDelta} above your ${rhrBase} bpm normal (first morning).`,
+        action: "750 ml water before noon and keep intensity moderate. Two mornings like this means rest." });
+    }
   } else if (result.rhrDelta >= T.rhrAdjustDelta) {
     d.push({ id: "rhr-up", level: "adjust", title: "Hydrate early",
       why: `Resting HR ${c.rhr} bpm, ${result.rhrDelta} above normal.`,
@@ -359,11 +427,12 @@ const minusMinutes = (hhmm, m) => {
 
 export function generateSchedule(archetypeId, c, directives = []) {
   const has = (id) => directives.some((d) => d.id === id);
+  const stop = (id) => directives.some((d) => d.id === id && d.level === "stop");
   return PLANS[archetypeId].map(([time, dur, type, title, detail], i) => {
-    const item = { id: `${archetypeId}-${i}`, time, dur, type, title, detail };
+    const item = { id: `${archetypeId}-${i}`, time, dur, type, title, detail, ...(type === "training" ? { slot: "training" } : {}) };
 
     if (type === "training" && archetypeId !== "restore") {
-      if (has("hrv-low") || has("rhr-high")) {
+      if (stop("hrv-low") || stop("rhr-high")) {
         return { ...item, type: "mobility", title: "Zone 2 walk + mobility (training swapped)",
           detail: "Autonomic markers are low. 30-min easy walk, then the mobility panel." };
       }
@@ -414,18 +483,125 @@ export function buildMobility(c, archetypeId) {
     .sort((a, b) => b.load - a.load || Number(!!b.required) - Number(!!a.required));
 }
 
-/* ---------- 8. One call for the whole day ---------- */
-export function planDay({ checkin, history, today }) {
+/* ---------- 8. One call for the whole day ----------
+   Only checkin/history/today are required. `profile` turns on the morning brief, the planned session and
+   everything learned; busy/fixtures (or the same fields on the check-in) fit the plan to the calendar. */
+const TODAY_FIELDS = ["hrv", "rhr", "sleepHours", "hrvCount", "hrvWindow", "bedTime", "wakeTime", "override"];
+
+export function planDay({ checkin, history, today, profile = null, busy = null, fixtures = null, maxTempC = null }) {
+  const learned = profile?.learned || {};
+  const sleepNeedH = isNum(learned.sleepNeedH) ? learned.sleepNeedH : SLEEP_TARGET_H;
+  const footballRecoveryH = isNum(learned.footballRecoveryH) ? learned.footballRecoveryH : LOAD.defaultFootballRecoveryH;
+  const override = checkin.override || null;
+  const busyBlocks = busy ?? checkin.busy ?? [];
+  const fx = fixtures ?? checkin.fixtures ?? [];
+
   const baselines = computeBaselines(history, today, checkin);
-  const result = calculateRecovery(checkin, baselines);
-  const archetype = getArchetype(result.score);
-  const withToday = upsertDay(history, { date: today, score: result.score });
-  const directives = generateDirectives({ c: checkin, result, baselines, history: withToday, today, archetypeId: archetype.id });
+  const result = calculateRecovery(checkin, baselines, { today, sleepNeedH });
+  const archetype = override ? getArchetype(0) : getArchetype(result.score);
+  const todayFields = Object.fromEntries(TODAY_FIELDS.filter((k) => checkin[k] != null).map((k) => [k, checkin[k]]));
+  const withToday = upsertDay(history, { ...todayFields, date: today, score: result.score });
+
+  // ---- Directions
+  let directives = generateDirectives({ c: checkin, result, baselines, history: withToday, today, archetypeId: archetype.id });
+  const trend = hrvTrend(withToday, today);
+  if (trend.band === "in" || trend.band === "above") {
+    // One low morning inside a normal 7-day trend is mostly noise (HRV4Training's lesson)
+    directives = directives.map((d) => (d.id === "hrv-low" ? { ...d, level: "adjust", title: "Low HRV this morning: cap at RPE 8",
+      why: `${d.why} Your 7-day average ${trend.avg7} ms is still within your ${trend.low}–${trend.high} ms range.`,
+      action: "Train, but no max efforts or top sets today." } : d));
+  }
+  if (trend.band === "below") {
+    directives.push({ id: "hrv-trend", level: "adjust", title: "7-day HRV below your normal range",
+      why: `7-day average ${trend.avg7} ms vs your ${trend.low}–${trend.high} ms range.`,
+      action: "Cut training volume by 30–40 % and keep RPE ≤ 7 until it's back in range." });
+  }
+
+  const planned = plannedSession(profile, today, fx);
+  const tomorrowPlanned = plannedSession(profile, shiftKey(today, 1));
+  const load = loadSummary(history, today);
+  if (load.spike) {
+    directives.push({ id: "load-spike", level: "adjust", title: "Training load spike",
+      why: `This week's load ${load.week} is ${load.ratio}× your 4-week average of ${load.chronic4wkAvg}.`,
+      action: "Keep today's plan but don't add sessions; make the next hard day moderate." });
+  }
+  if (planned === "lower" && tomorrowPlanned === "football") {
+    directives.push({ id: "spacing", level: "adjust", title: "Football tomorrow: keep legs light",
+      why: `Heavy legs today leave about 24 h before football (aim for ${LOAD.lowerBeforeFootballH} h).`,
+      action: "Swap to upper body, or halve lower-body volume." });
+  }
+  const fresh = freshness(history, today, footballRecoveryH);
+  if (planned === "lower" && fresh.lower.state === "recovering" && fresh.lower.after === "football") {
+    directives.push({ id: "spacing-recovery", level: "adjust", title: "Still recovering from football",
+      why: `${fresh.lower.hoursSince} h since football; you need about ${footballRecoveryH} h.`,
+      action: "Upper body or Zone 2 today; move heavy legs back a day." });
+  }
+  const ankle = ankleSummary(history, today, profile?.injuredSide);
+  const physio = anklePhysioDirective(ankle);
+  if (physio) directives.push(physio);
+  if (override) {
+    directives = directives.filter((d) => d.id !== "push");
+    directives.unshift({ id: "override", level: "stop",
+      title: override === "ill" ? "Recover: you're unwell" : "Recover: high-stress day",
+      why: `You marked today as ${OVERRIDE_LABELS[override] || override}. It's left out of your baselines.`,
+      action: "Walk, mobility, breathwork and an early night. No training." });
+  }
+  if (directives.some((d) => d.level !== "go")) directives = directives.filter((d) => d.id !== "on-track");
+  directives.sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]);
+
+  // ---- Training decision
+  const rhrDays = baselines.source === "rolling" ? rhrRun(history.filter((h) => h.date < today), today, baselines.rhr.mean, THRESHOLDS.rhrStopDelta, checkin.rhr) : 0;
+  const decision = planned ? trainingDecision({ trend, result, planned, ankleHip: checkin.ankleHip, rhrDays, override,
+    sleepHours: checkin.sleepHours, ankleStop: THRESHOLDS.ankleStop, hrvStopZ: THRESHOLDS.hrvStopZ,
+    hrvAdjustZ: THRESHOLDS.hrvAdjustZ, pushScore: THRESHOLDS.pushScore }) : null;
+
+  // ---- Schedule
+  let schedule = applyDecision(generateSchedule(archetype.id, checkin, directives), decision, planned);
+  if (isWeekend(today) && isNum(learned.chronotypeMin)) {
+    const shift = chronotypeShiftMin(learned.chronotypeMin);
+    if (shift) schedule = schedule.map((i) => (i.type === "wind" ? i : { ...i, time: fromMin(toMin(i.time) + shift) }));
+  }
+
+  // ---- Morning brief (needs a profile)
+  const debt = sleepDebt(checkin.sleepHours, baselines.recentSleep, sleepNeedH);
+  let brief = null;
+  if (profile) {
+    const avgBed7 = avgBedtime7(withToday, today);
+    const bed = targetBedtime({ wakeTomorrow: wakeFor(profile, shiftKey(today, 1)), sleepNeedH, debtH: debt,
+      hardTomorrow: isHardSession(tomorrowPlanned), avgBed7 });
+    const cutoffs = eveningCutoffs(bed.time);
+    const training = schedule.find((i) => i.slot === "training");
+    const football = fx.find((f) => f.type === "football");
+    const sessionType = decision?.decision === "recover" ? "rest" : planned;
+    const sessionMinutes = !isHardSession(sessionType) ? 0 : football ? 90 : training?.dur ?? SESSION_DEFAULTS[sessionType].minutes;
+    const sessionStart = football ? fromMin(football.start) : training?.time ?? SESSION_DEFAULTS[sessionType]?.start ?? null;
+    const weightKg = bodyWeight(profile, today);
+    const exp = profile.experiment ? experimentById(profile.experiment.id) : null;
+    brief = {
+      planned, tomorrowPlanned, decision, bedtime: bed, cutoffs, weightKg, sleepNeedH,
+      sleepNeedLearned: isNum(learned.sleepNeedH),
+      water: waterTarget({ sessionMinutes, maxTempC, rhrFlag: result.rhrDelta >= THRESHOLDS.rhrAdjustDelta, sweatRateLph: profile.sweatRateLph }),
+      nutrition: nutritionTargets({ weightKg, dayType: dayTypeFor(sessionType), wake: wakeFor(profile, today), sessionStart, sessionMinutes, cutoffs }),
+      focus: dailyFocus({ result, debt, trend, checkin, load, bedtime: bed.time, avgBed7, lastBed: checkin.bedTime }),
+      fact: factOfTheDay(factContext({ checkin, result, debt, trend, planned, today,
+        irregular: !!(avgBed7 && checkin.bedTime && Math.abs(toMin(checkin.bedTime) - toMin(avgBed7)) >= 45) }), today),
+      experiment: exp ? assignArm(exp, profile.experiment.start, today, planned) : null,
+    };
+    schedule = applyBriefToSchedule(schedule, brief);
+  }
+
+  // ---- Calendar
+  const cal = fitScheduleToCalendar(schedule, busyBlocks, fx);
+
   return {
     baselines, result, archetype, directives,
-    schedule: generateSchedule(archetype.id, checkin, directives),
+    schedule: cal.schedule,
+    calendar: { moved: cal.moved, dropped: cal.dropped, busy: busyBlocks, fixtures: fx },
     drills: buildMobility(checkin, archetype.id),
-    sleepDebt: sleepDebt(checkin.sleepHours, baselines.recentSleep),
+    sleepDebt: debt,
+    confidence: dataConfidence({ ...checkin, override }),
+    baselineNights: baselineNights(withToday, today),
+    trend, planned, decision, load, freshness: fresh, ankle, brief,
   };
 }
 
