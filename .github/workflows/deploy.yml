@@ -1,5 +1,7 @@
-name: Test and deploy
+name: Test and build
 
+# The site is hosted on Vercel, which deploys `main` itself (vercel.json runs the tests first).
+# This workflow is the safety check on every pull request and push: tests + production build.
 on:
   push:
     branches: [main]
@@ -8,11 +10,9 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'pages' }}
+  group: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'main' }}
   cancel-in-progress: true
 
 jobs:
@@ -26,26 +26,3 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm test
       - run: npm run build
-        env:
-          # Repository variables (Settings → Secrets and variables → Actions → Variables).
-          # Both are public by design; leave them unset and the app stays local-only.
-          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
-      # Pull requests stop here: tests and build must pass, nothing is published
-      - if: github.event_name != 'pull_request'
-        uses: actions/configure-pages@v5
-      - if: github.event_name != 'pull_request'
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-
-  deploy:
-    if: github.event_name != 'pull_request'
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4

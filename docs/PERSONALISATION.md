@@ -22,9 +22,9 @@ Already built and assumed here: 30-day baselines, weekly review, tunable `THRESH
 | 8 | Ankle numbers | Rehab progress in cm and seconds, left vs right | S | Weekly 3-min test |
 | 9 | Personal experiments | Cause and effect for your habits | L | Follows a protocol |
 | 10 | Baseline shift detection | Fitness gains vs noise | M | None |
-| 11 | Blood markers | What you're actually low in | S | Results from a test |
-| 12 | Training log import | Strength progress vs recovery | M | Hevy Pro (optional) |
-| 13 | Ask CHINH | Plain-language questions over your history | L | Claude API via Supabase |
+| 11 | Heart-rate training load | Your real training load, without logging | M | HR zone minutes from the strap |
+| 12 | Steps & active energy | What big days do to your next morning | S | Steps, active kcal from the strap |
+| 13 | Overnight blood oxygen | A second illness signal next to resting HR | S | SpO2 from the strap |
 
 S = a few hours · M = a day or two · L = several days
 
@@ -156,42 +156,26 @@ Rolling baselines slowly absorb change, so a real fitness gain or a creeping ill
 
 It's encouraging, and it stops the app treating a fitter you as "above baseline, push" forever.
 
-## 11. Blood markers ("what am I lacking", properly)
+## 11. Heart-rate training load (from the strap)
 
-No wearable can measure nutrient status. Twice-yearly blood tests can, from your GP or a UK home finger-prick service. Enter:
+Shortcuts can't read workout records, but it can read the strap's heart-rate samples. The morning Shortcut counts yesterday's samples in five zones (% of your max HR) and CHINH turns them into minutes and an **Edwards TRIMP** load (minutes × zone number).
+- **Load without logging:** you no longer have to log a session for load to count. Days with real training are detected automatically, and RPE and "how did it go?" become optional.
+- **Max HR:** taken from your own data (98th percentile of daily highs over 90 days), not an age formula.
+- **No mixing:** heart-rate load and RPE load are never mixed in one comparison.
 
-- Ferritin
-- Vitamin D (25-OH)
-- B12
-- HbA1c
-- Lipid panel
+## 12. Steps and active energy
 
-CHINH stores them with dates and reference ranges. Results it can act on:
+- **Yesterday's numbers:** steps and active energy, against your 30-day normal.
+- **"Big day" tag:** active energy ≥ 1.5× your normal. CHINH then learns what big days do to your next morning.
+- **Restoration days:** after a very low-step day, the plan adds a 30-minute easy walk.
 
-- **Low vitamin D:** the NHS's October–March 10 µg advice becomes a daily item.
-- **Ferritin low or falling:** food suggestions plus "discuss with your GP".
+## 13. Overnight blood oxygen
 
-CHINH never diagnoses; it tracks and reminds.
+- **Supporting signal only:** the strap's overnight SpO2 never fires anything on its own, because wrist readings are noisy.
+- **When it helps:** when resting HR is up two mornings running *and* overnight oxygen is ≥ 2 points under your normal, the illness warning says so.
+- **Likely artefacts:** a single very low reading (< 88 %) is treated as a loose strap, not a health claim.
 
-## 12. Training log import (optional)
-
-Hevy's API needs a paid subscription. If you log there, CHINH can import sets and compute:
-
-- **Estimated 1RM trends** per main lift.
-- **Weekly volume** per muscle group.
-- **Training quality vs readiness:** "Top sets on green days average 4 % heavier."
-
-Without Hevy, the session-RPE tap plus Zepp workouts from Apple Health is enough for load tracking.
-
-**Objective readiness add-on:** a weekly countermovement jump with the **My Jump 2** iPhone app. It matched a force platform almost perfectly (r ≈ 0.999) in validation work. Its use for *fatigue* monitoring isn't validated in that study, so treat a drop as a prompt, not a rule.
-
-## 13. Ask CHINH (later)
-
-Ask questions over your own history in plain English: "Why was Tuesday low?", "Am I sleeping better than last month?".
-
-- **How:** Claude API, called from a Supabase Edge Function so the API key never sits in the public repo.
-- **Rule:** the model **explains** numbers computed by the engine. It never invents or decides them.
-- **Privacy:** this sends health data to an external API, so it's opt-in, and the setting says exactly what is sent.
+**Out of scope (by choice):** blood tests, training-app imports, phone jump tests, an AI chat and a native app. CHINH uses only what the Helio Strap measures, plus the quick ratings you give it, and stays a website.
 
 ---
 
@@ -232,14 +216,14 @@ Status against the code on `main` (19 Oct 2026). **Now** = answered today; **Bui
 | How long do I need to recover from football? | Build #6 · Wait ~6 matches | Recovery profile |
 | Does my score actually predict good sessions? Which input matters most for me? | Build #7 · Wait 20–30 sessions | Predictive check |
 | Is my fitness improving? | Build #10 · Wait ~6 wk | Baseline shift detection |
-| What am I low in? | Build #11 | Blood markers (+ NHS vitamin D advice now) |
+| What was my real training load? | Build #11 | Heart-rate zones from the strap |
 
 ### Cause and effect
 | Question | Status | Answered by |
 |---|---|---|
 | Does late coffee / a late dinner / alcohol hurt my recovery? | Build #2 · Wait ~8 tagged days each | Tag comparison |
 | What actually works for me? | Build #9 · 2–4 wk per test | Personal experiments |
-| Why was Tuesday so low? | Build #2 now · #13 later | Tags explain the day; Ask CHINH answers in plain English |
+| Why was Tuesday so low? | Now (#2) | Evening tags, load and sleep explain the day |
 
 ## Gaps found in the current code
 
@@ -256,14 +240,13 @@ Small fixes worth making before the personal-learning features, because each one
 1. **This week:** #1 calendar, #2 evening check-out, #3 data confidence, plus bed/wake times in the Shortcut. These are the data foundations everything else learns from.
 2. **Weeks 2–4:** #8 ankle numbers (start now: the curve needs time) and #7 session quality.
 3. **After 4–6 weeks of data:** #4 sleep need, #5 chronotype, #6 football profile.
-4. **Month 2+:** #9 experiments, #10 shift detection, #11 bloods.
-5. **Later:** #12 Hevy, #13 Ask CHINH, native iPhone app.
+4. **Month 2+:** #9 experiments, #10 shift detection.
+5. **Next (strap data):** #11 heart-rate load, #12 steps & active energy, #13 overnight blood oxygen.
 
 ## Sources
 
 - Saw, Main & Gastin 2016, BJSM, subjective vs objective monitoring: https://bjsm.bmj.com/content/50/5/281
 - Kitamura et al. 2016, Sci Rep, individual optimal sleep duration: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5075948/
 - Social jetlag & MCTQ (Roenneberg et al. 2003, 2012): https://en.wikipedia.org/wiki/Munich_Chronotype_Questionnaire · https://pmc.ncbi.nlm.nih.gov/articles/PMC10204006
-- My Jump 2 validity: https://peerj.com/articles/17658
-- Hevy / strength app APIs: https://forum.intervals.icu/t/weight-training-apps-with-public-api/125221
+- Zepp → Apple Health data types: https://trainconstant.com/blog/amazfit-zepp-apple-health
 - Hupperets et al. 2009 BMJ (balance training and recurrent ankle sprains) and the sources in `FEATURE_RESEARCH.md`.

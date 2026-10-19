@@ -2,7 +2,7 @@
 
 A dark-mode daily recovery dashboard that turns last night's data into directions and an hour-by-hour action plan.
 
-**Live:** https://tonyfromvietnam.github.io/chinh-recovery/
+**Live:** https://chinh-recovery.vercel.app/
 
 ## The pipeline
 
@@ -29,11 +29,11 @@ Set-up guide for the Shortcut: [docs/APPLE_HEALTH_SHORTCUT.md](docs/APPLE_HEALTH
 
 ```bash
 npm install
-npm run dev     # http://localhost:5173/chinh-recovery/
+npm run dev     # http://localhost:5173/
 npm test        # engine unit tests, no extra packages needed
 ```
 
-Every push to `main` runs the tests, builds and deploys to GitHub Pages.
+Every push to `main` is tested and deployed by Vercel (`vercel.json` runs `npm test` before the build). GitHub Actions tests and builds every pull request.
 
 ## Project layout
 
@@ -59,7 +59,9 @@ docs/                  Apple Health Shortcut guide
 - [x] M4 Weekly ankle tests, left vs right
 - [x] M5 Learned sleep need, chronotype, football recovery, habit effects, score check, baseline shifts
 - [x] M6 Personal experiments
-- [ ] M7 Blood markers, Hevy import, Ask CHINH, native iPhone app (see `docs/TECH_SPEC.md`)
+- [ ] M7 More from the Helio Strap: heart-rate training load, steps & active energy, overnight blood oxygen, sleep stages (see `docs/TECH_SPEC.md`)
+
+**Scope:** CHINH only uses what the Amazfit Helio Strap measures (via Zepp → Apple Health) plus quick self-ratings. It stays a website, hosted on Vercel; there's no native app, blood-test tracking or third-party app imports.
 
 ## Privacy
 

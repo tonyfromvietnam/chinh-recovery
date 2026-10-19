@@ -19,7 +19,7 @@ Written against iOS 18/26 Shortcuts. Older versions name a few things differentl
 
 1. **Health → Sharing → Apps → Zepp:** turn on **Heart Rate Variability**, **Resting Heart Rate** and **Sleep**.
 2. **Health → Browse → Heart → Heart Rate Variability → Show All Data:** confirm there are entries from **Zepp** for last night. If there are none, open Zepp so it syncs with the strap. If there are still none, update the strap in Zepp (HRV sharing needs Helio Strap firmware 3.3.10.3 or later).
-3. Open **https://tonyfromvietnam.github.io/chinh-recovery/** once in Safari. Use Safari for CHINH, not a home-screen icon: iOS keeps separate storage for each, and the Shortcut opens Safari.
+3. Open **https://chinh-recovery.vercel.app/** once in Safari. Use Safari for CHINH, not a home-screen icon: iOS keeps separate storage for each, and the Shortcut opens Safari.
 
 ## 2. Build the Shortcut (5 min)
 
@@ -70,7 +70,7 @@ Shortcuts → **+** → name it **Health Sync**.
 
 13. **Text**: type the link and insert the variables where shown (tap **Select Variable** above the keyboard, then tap the matching **Set Variable** action). No spaces or line breaks:
     ```
-    https://tonyfromvietnam.github.io/chinh-recovery/#hrv=[HRV]&rhr=[RHR]&sleep=[Sleep]
+    https://chinh-recovery.vercel.app/#hrv=[HRV]&rhr=[RHR]&sleep=[Sleep]
     ```
 14. **Open URLs**
 
@@ -103,12 +103,12 @@ v2 makes the numbers more trustworthy and turns on the calendar-aware plan. Ever
 
 **New link** (step 13):
 ```
-https://tonyfromvietnam.github.io/chinh-recovery/#hrv=[HRV]&hrvn=[HRVn]&hw=o&rhr=[RHR]&sleep=[Sleep]&bed=[Bed]&wake=[Wake]&busy=[Combined Text]&fb=[FB]
+https://chinh-recovery.vercel.app/#hrv=[HRV]&hrvn=[HRVn]&hw=o&rhr=[RHR]&sleep=[Sleep]&bed=[Bed]&wake=[Wake]&busy=[Combined Text]&fb=[FB]
 ```
 Add **URL Encode** before **Open URLs** if a calendar is included.
 
 Test it without the Shortcut:
-`https://tonyfromvietnam.github.io/chinh-recovery/#hrv=58&hrvn=3&hw=o&rhr=54&sleep=7.4&bed=23:05&wake=07:01&busy=0930-1030,1400-1500`
+`https://chinh-recovery.vercel.app/#hrv=58&hrvn=3&hw=o&rhr=54&sleep=7.4&bed=23:05&wake=07:01&busy=0930-1030,1400-1500`
 
 ## 3. What happens when it runs
 
@@ -171,7 +171,7 @@ New Shortcut → name it **BackFill**:
 
 13. **Combine Text** → `Rows`, separator **Custom** `;`
 14. **URL Encode** → Combined Text. **Don't skip this:** dates with spaces make an invalid link, and Open URLs then fails silently.
-15. **Text** → `https://tonyfromvietnam.github.io/chinh-recovery/#history=[URL Encoded Text]`
+15. **Text** → `https://chinh-recovery.vercel.app/#history=[URL Encoded Text]`
 16. **Open URLs**
 
 It takes 10–30 seconds. CHINH shows **"Imported 30 days from Apple Health (N with HRV)"**, and the bottom of the recovery card switches to **"Baseline: your last 30 days"**. Days with no data are left empty, so a few gaps are fine.
@@ -179,7 +179,7 @@ It takes 10–30 seconds. CHINH shows **"Imported 30 days from Apple Health (N w
 **Check it before importing:** temporarily swap **Open URLs** for **Quick Look** and set Repeat to **2**. Each row should look like `16 Oct 2026 at 12:00,77,48,24039` (date, HRV, resting HR, sleep seconds).
 
 **Test the import without the Shortcut:**
-`https://tonyfromvietnam.github.io/chinh-recovery/#history=2026-10-13,58,54,7.4;2026-10-14,61,53,7.1`
+`https://chinh-recovery.vercel.app/#history=2026-10-13,58,54,7.4;2026-10-14,61,53,7.1`
 
 ## What CHINH does with it
 
@@ -205,6 +205,6 @@ It takes 10–30 seconds. CHINH shows **"Imported 30 days from Apple Health (N w
 | BackFill rows start with `12:00` or all show today's date | The date chip in the row Text is formatting the time, or a date that doesn't change each loop. Use the **WindowEnd** variable in the row (step 10). |
 | BackFill sleep empty in every row | Get Details under the sleep Find is reading the wrong input. Delete it and add it again directly under the Find. |
 | BackFill runs but nothing imports | Missing **URL Encode** (step 14), or the large-data setting is off. |
-| Test without the Shortcut | Open `https://tonyfromvietnam.github.io/chinh-recovery/#hrv=58&rhr=54&sleep=7.4`. |
+| Test without the Shortcut | Open `https://chinh-recovery.vercel.app/#hrv=58&rhr=54&sleep=7.4`. |
 
 **Keep HRV from one source.** Baselines only make sense if every day's HRV comes from the same place, so keep **Source is Zepp** on and don't mix in values typed from another app.

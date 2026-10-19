@@ -5,9 +5,9 @@ Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
 
 ## Commands
 
-- `npm run dev` – local server at http://localhost:5173/chinh-recovery/
+- `npm run dev` – local server at http://localhost:5173/
 - `npm test` – engine tests in `tests/*.test.js` (node:test, no extra packages)
-- `npm run build` – production build; every push to `main` tests, builds and deploys to GitHub Pages
+- `npm run build` – production build. Hosting is **Vercel**: it deploys every push to `main` and runs `npm test` first (`vercel.json`). GitHub Actions tests and builds every PR. Live: https://chinh-recovery.vercel.app
 
 ## Architecture
 
@@ -18,6 +18,10 @@ Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
 - HRV baselines are on ln(HRV): `hrv.mean` is the geometric mean for display; `hrv.lnMean`/`hrv.lnSd` drive z-scores. Override days are excluded from baselines and everything learned.
 - `src/CHINHDashboard.jsx` – UI only. Calls `planDay({ checkin, history, today, profile, busy, fixtures, maxTempC })` and renders the result. New cards live in `src/components/`. Per-day fields (`busy`, `fixtures`, `override`, `evening`, `session`, `ankleTest`, `experiment`) are stored on the day record, never in the carried-over check-in. The profile (`chinh-profile`, Supabase `profile` table) holds weight, wake times, weekly template and the active experiment; `learned` values are recomputed from history and never stored.
 - Data arrives from an iOS Shortcut as `#hrv=…&rhr=…&sleep=…` (see `docs/APPLE_HEALTH_SHORTCUT.md`). A sync checks in straight away with no form: soreness, energy and sleep quality carry over from the last time they were rated (`ratedOn`); the check-in form is only for days something changed. History lives in `localStorage` on the device and, when signed in, syncs to Supabase (`src/supabase.js`, table `days`, setup in `docs/SUPABASE_SETUP.md`). Merge rules (`mergeHistories`, newest `updatedAt` wins) are pure functions in the engine; every write to a day must stamp `updatedAt`; each check-in also stores the direction ids that fired and how much of the plan and mobility list was ticked off.
+
+## Scope
+
+- Data sources: only what the Amazfit Helio Strap measures (via Zepp → Apple Health → Shortcut) plus the quick self-ratings already in the app. No blood tests, third-party app imports, AI chat or native app; CHINH is a website.
 
 ## Rules the engine must keep
 

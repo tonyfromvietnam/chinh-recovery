@@ -15,8 +15,8 @@ Researched 19 Oct 2026. For each product: what it does that matters for CHINH, t
 | RISE | Sleep app | Sleep need + sleep debt → bedtime that **shifts gradually** | M2, M5 |
 | MacroFactor | Nutrition | Expenditure from **trended weight + intake**, adherence-neutral | M2 (optional) |
 | Bearable | Symptom/habit tracker | With-vs-without factor report; same-day vs next-7-days effect | M5 |
-| Fitbod | Strength app | Per-muscle recovery %, e1RM from logged sets, RIR | M3, M7 |
-| Oura | Ring + app | Readiness "contributors" breakdown; AI advisor over your data | Existing UI, M7 |
+| Fitbod | Strength app | Per-muscle recovery %, e1RM from logged sets, RIR | M3 |
+| Oura | Ring + app | Readiness "contributors" breakdown | Existing UI |
 
 ---
 
@@ -113,7 +113,7 @@ Researched 19 Oct 2026. For each product: what it does that matters for CHINH, t
 - **Estimated 1RM** (Epley and similar), max-effort sets to refresh it, and **reps in reserve** shaping the next session.
 - Hypertrophy at 10–20 working sets per muscle per week.
 
-**Learn:** CHINH's weekly template plus logged sessions can give a simple **"fresh / recovering"** state for upper, lower and ankle-chain. That's M3. Leave per-exercise e1RM to the optional Hevy import (M7) rather than building a lifting log.
+**Learn:** CHINH's weekly template plus logged sessions can give a simple **"fresh / recovering"** state for upper, lower and ankle-chain. That's M3. Per-exercise e1RM is out of scope: CHINH uses strap data, not a lifting log.
 
 ---
 
