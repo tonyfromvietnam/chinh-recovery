@@ -14,6 +14,7 @@ import {
 } from "./engine/brief.js";
 import { hrvTrend, rhrRun, trainingDecision, applyDecision, LOAD } from "./engine/load.js";
 import { baselineNights, chronotypeShiftMin } from "./engine/learning.js";
+import { zoneMinutes, autoSession, hrLoadSummary, personalMaxHr, activityVitals, addEasyWalk, spo2Status, sleepStages } from "./engine/strap.js";
 
 export { dateKey, shiftKey };
 export * from "./engine/util.js";
@@ -21,6 +22,7 @@ export * from "./engine/confidence.js";
 export * from "./engine/brief.js";
 export * from "./engine/load.js";
 export * from "./engine/learning.js";
+export * from "./engine/strap.js";
 
 export const SLEEP_TARGET_H = 8;
 export const BASELINE_WINDOW_DAYS = 30;
@@ -63,7 +65,50 @@ export function parseSyncHash(hash) {
     const m = parseClockParam(params.get(k));
     if (m) out[field] = m;
   }
+
+  // M7: yesterday's activity (stored on yesterday's record) and overnight readings (stored on today's)
+  const yesterday = {};
+  const counts = (params.get("z") || "").split(",").map((v) => (v.trim() === "" ? NaN : Number(v)));
+  const hri = num("hri");
+  const zones = counts.length === 5 && counts.every((c) => c >= 0 && c <= 5000) ? zoneMinutes(counts.map(Math.round), hri != null && hri >= 1 && hri <= 600 ? hri : undefined) : null;
+  if (zones) yesterday.hrZones = zones;
+  const hrmax = num("hrmax");
+  if (hrmax != null && hrmax >= 60 && hrmax <= 230) yesterday.hrMax = Math.round(hrmax);
+  const st = num("st");
+  if (st != null && st >= 0 && st <= 100000) yesterday.steps = Math.round(st);
+  const ae = num("ae");
+  if (ae != null && ae >= 0 && ae <= 10000) yesterday.activeKcal = Math.round(ae);
+  if (Object.keys(yesterday).length) out.yesterday = yesterday;
+
+  const overnight = {};
+  const pct = (v) => (v != null && v > 0 && v <= 1 ? v * 100 : v); // Health can report oxygen as 0.96
+  const spo2 = pct(num("spo2"));
+  if (spo2 != null && spo2 >= 70 && spo2 <= 100) overnight.spo2 = round1(spo2);
+  const spo2min = pct(num("spo2min"));
+  if (spo2min != null && spo2min >= 50 && spo2min <= 100) overnight.spo2Min = Math.round(spo2min);
+  const stages = {};
+  for (const k of ["deep", "rem", "core"]) {
+    let v = num(k);
+    if (v != null && v > 900) v /= 60; // seconds
+    if (v != null && v >= 0 && v <= 900) stages[k] = Math.round(v);
+  }
+  if (Object.values(stages).some((v) => v > 0)) overnight.stages = stages;
+  if (Object.keys(overnight).length) out.overnight = overnight;
+
   return Object.keys(out).length ? out : null;
+}
+
+/* Writes yesterday's strap data (HR zones, max HR, steps, active energy) onto yesterday's record, and turns
+   a high-load day into an automatic session. A session someone logged by hand in the old app is left alone. */
+export function applyYesterday(history, today, yesterday, profile = null, now = Date.now()) {
+  if (!yesterday || !Object.keys(yesterday).length) return history;
+  const date = shiftKey(today, -1);
+  const prev = history.find((h) => h.date === date);
+  const entry = { date, ...yesterday, updatedAt: now };
+  if (Array.isArray(yesterday.hrZones) && (!prev?.session || prev.session.auto)) {
+    entry.session = autoSession(date, yesterday.hrZones, profile);
+  }
+  return upsertDay(history, entry);
 }
 
 /* "23:12", "2312" or "23.12" → "23:12" */
@@ -470,7 +515,7 @@ export function buildMobility(c, archetypeId) {
 /* ---------- 8. One call for the whole day ----------
    Only checkin/history/today are required. `profile` (wake times, weekly plan) turns on the morning brief,
    the planned-session decision and everything learned. Every input is either strap data or a quick rating. */
-const TODAY_FIELDS = ["hrv", "rhr", "sleepHours", "hrvCount", "hrvWindow", "bedTime", "wakeTime", "override"];
+const TODAY_FIELDS = ["hrv", "rhr", "sleepHours", "hrvCount", "hrvWindow", "bedTime", "wakeTime", "override", "spo2", "spo2Min", "stages"];
 
 export function planDay({ checkin, history, today, profile = null }) {
   const learned = profile?.learned || {};
@@ -512,6 +557,12 @@ export function planDay({ checkin, history, today, profile = null }) {
       why: `You marked today as ${OVERRIDE_LABELS[override] || override}. It's left out of your baselines.`,
       action: "Walk, mobility, breathwork and an early night. No training." });
   }
+  // Overnight oxygen only ever supports the resting-HR warning; it never fires a direction of its own
+  const spo2 = spo2Status(checkin, history, today);
+  if (spo2?.down && !spo2.artefact) {
+    directives = directives.map((d) => (d.id === "rhr-high" ? { ...d,
+      why: `${d.why} Overnight oxygen is down ${spo2.drop} points too (${spo2.value} % vs your ${spo2.baseline} %).` } : d));
+  }
   if (directives.some((d) => d.level !== "go")) directives = directives.filter((d) => d.id !== "on-track");
   directives.sort((a, b) => LEVEL_ORDER[a.level] - LEVEL_ORDER[b.level]);
 
@@ -522,7 +573,8 @@ export function planDay({ checkin, history, today, profile = null }) {
     hrvAdjustZ: THRESHOLDS.hrvAdjustZ, pushScore: THRESHOLDS.pushScore }) : null;
 
   // ---- Schedule
-  let schedule = applyDecision(generateSchedule(archetype.id, checkin, directives), decision, planned);
+  const activity = activityVitals(history, today);
+  let schedule = addEasyWalk(applyDecision(generateSchedule(archetype.id, checkin, directives), decision, planned), archetype.id, activity);
   if (isWeekend(today) && isNum(learned.chronotypeMin)) {
     const shift = chronotypeShiftMin(learned.chronotypeMin);
     if (shift) schedule = schedule.map((i) => (i.type === "wind" ? i : { ...i, time: fromMin(toMin(i.time) + shift) }));
@@ -553,6 +605,10 @@ export function planDay({ checkin, history, today, profile = null }) {
     confidence: dataConfidence({ ...checkin, override }),
     baselineNights: baselineNights(withToday, today),
     trend, planned, decision, brief,
+    load: hrLoadSummary(history, today),
+    maxHr: personalMaxHr(history, profile, today),
+    activity, spo2,
+    stages: sleepStages(checkin.stages),
   };
 }
 

@@ -2,7 +2,7 @@
    until then it reports progress ("5/8 days"). Nothing here changes the score weights. */
 import { isNum, mean, stdev, median, round1, shiftKey, isWeekend, toMin, fromMin, eveningMin, isHHMM, welch, clamp } from "./util.js";
 import { usableForLearning } from "./confidence.js";
-import { computeBaselines } from "../engine.js";
+import { computeBaselines, isBigDay } from "../engine.js";
 
 export const LEARNING = {
   initNights: 19,
@@ -12,6 +12,8 @@ export const LEARNING = {
   shiftRefDays: [90, 42], shiftMinRef: 20, shiftMinMonitor: 14,
   cusumK: 0.5, cusumH: 5,
   chronotypeAnchor: 3 * 60 + 30, chronotypeMaxShiftMin: 60,
+  footballMinMatches: 4, footballLookaheadDays: 4, footballHrvZ: -0.5, footballRhrMargin: 2,
+  footballDefaultStart: 19 * 60, footballDefaultWake: 7 * 60, // auto-detected matches have no start time
 };
 
 /* ---------- Baseline at each date (computed once, reused) ---------- */
@@ -83,7 +85,7 @@ export function tagsForDay(day, byDate) {
   const tags = new Set();
   const next = byDate.get(shiftKey(day.date, 1));
   if (isHHMM(next?.bedTime) && eveningMin(next.bedTime) > eveningMin("23:30")) tags.add("late-bed");
-  if (day.bigDay) tags.add("big-day");
+  if (isBigDay(day, byDate)) tags.add("big-day");
   return tags;
 }
 
@@ -202,15 +204,47 @@ export function baselineShift(history, today) {
   return { ...out, ready: true, hrv, rhr };
 }
 
+/* ---------- Football recovery (M7.1) ----------
+   Hours from a match until HRV and resting HR are back to normal, from football days the strap's
+   heart-rate load picked up automatically. A match with no recovery inside 4 days counts as censored. */
+export function footballRecoveryProfile(history, bmap = null) {
+  const bm = bmap || baselineMap(history);
+  const byDate = byDateMap(history);
+  const matches = history.filter((d) => d.session?.auto && d.session.type === "football" && bm.get(d.date));
+  const hours = [];
+  let censored = 0;
+  for (const m of matches) {
+    const b = bm.get(m.date);
+    let found = null;
+    for (let k = 1; k <= LEARNING.footballLookaheadDays; k++) {
+      const d = byDate.get(shiftKey(m.date, k));
+      if (!d || !usableForLearning(d) || !isNum(d.rhr)) continue;
+      const z = lnZ(d.hrv, b);
+      if (z != null && z >= LEARNING.footballHrvZ && d.rhr <= b.rhrMean + LEARNING.footballRhrMargin) {
+        const wake = toMin(d.wakeTime) ?? LEARNING.footballDefaultWake;
+        found = Math.round((k * 1440 + wake - LEARNING.footballDefaultStart) / 60);
+        break;
+      }
+    }
+    if (found != null) hours.push(found); else censored++;
+  }
+  const n = hours.length + censored;
+  const ready = n >= LEARNING.footballMinMatches;
+  return { n, needed: LEARNING.footballMinMatches, censored, ready,
+    hours: ready ? (censored > hours.length ? LEARNING.footballLookaheadDays * 24 : Math.round(median(hours))) : null };
+}
+
 /* ---------- Everything learned, for the profile ---------- */
 export function learnProfile(history, today) {
   const bmap = baselineMap(history);
   const sleep = estimateSleepNeed(history, bmap);
   const chrono = chronotype(history);
+  const football = footballRecoveryProfile(history, bmap);
   return {
     sleepNeedH: sleep.hours, sleepNeedN: sleep.n,
     chronotypeMSF: chrono.ready ? chrono.msfsc : null, chronotypeMin: chrono.ready ? chrono.msfscMin : null,
     chronotypeType: chrono.ready ? chrono.type : null, socialJetlagH: chrono.ready ? chrono.socialJetlagH : null,
+    footballRecoveryH: football.hours, footballN: football.n,
     updatedOn: today,
   };
 }

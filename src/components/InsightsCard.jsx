@@ -1,9 +1,9 @@
-/* M5 — What CHINH has learned about you from the strap: sleep need, body clock, bedtime effects, baseline shifts. */
+/* M5 — What CHINH has learned about you from the strap: sleep need, body clock, football recovery (M7.1), habit effects, baseline shifts. */
 import React, { useMemo, useState } from "react";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardHeader, Chips, VERDICT_TONE } from "./ui.jsx";
 import {
-  baselineMap, tagEffects, estimateSleepNeed, chronotype, baselineShift, OUTCOMES, TAG_LABELS, TARGETS, LEARNING,
+  baselineMap, tagEffects, estimateSleepNeed, chronotype, baselineShift, footballRecoveryProfile, OUTCOMES, TAG_LABELS, TARGETS, LEARNING, LOAD,
 } from "../engine.js";
 
 const hm = (h) => `${Math.floor(h)} h ${String(Math.round((h % 1) * 60)).padStart(2, "0")} m`;
@@ -45,6 +45,7 @@ export default function InsightsCard({ history, today }) {
   const bmap = useMemo(() => baselineMap(history), [history]);
   const sleep = useMemo(() => estimateSleepNeed(history, bmap), [history, bmap]);
   const chrono = useMemo(() => chronotype(history), [history]);
+  const football = useMemo(() => footballRecoveryProfile(history, bmap), [history, bmap]);
   const shift = useMemo(() => baselineShift(history, today), [history, today]);
   const effects = useMemo(() => tagEffects(history, today, { outcome, lag, bmap }), [history, today, outcome, lag, bmap]);
   const meta = OUTCOMES[outcome];
@@ -73,13 +74,16 @@ export default function InsightsCard({ history, today }) {
           n={Math.min(chrono.nFree, LEARNING.chronotypeMinFree) + Math.min(chrono.nWork, LEARNING.chronotypeMinWork)}
           needed={LEARNING.chronotypeMinFree + LEARNING.chronotypeMinWork}
           note={chrono.ready ? `Social jetlag ${chrono.socialJetlagH} h (aim < 1 h)` : "Needs bed and wake times from the Shortcut"} />
+        <Learned label="Football recovery" value={football.hours != null ? `${football.hours} h` : null} fallback={`${LOAD.defaultFootballRecoveryH} h`}
+          n={football.n} needed={football.needed}
+          note="Hours until HRV and resting HR are back to normal after football days the strap picked up" />
       </div>
 
       <div className="mt-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-slate-200">What late nights do to you</p>
-            <p className="text-xs text-slate-500">Nights in bed after 23:30 vs earlier (from the strap's bedtimes), last 90 days. Needs {LEARNING.tagMinEach} of each.</p>
+            <p className="text-sm font-semibold text-slate-200">What late nights and big days do to you</p>
+            <p className="text-xs text-slate-500">Bed after 23:30, and days with 1.5× your usual active energy, against the rest (from the strap), last 90 days. Needs {LEARNING.tagMinEach} of each.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Chips label="Outcome" value={outcome} onChange={setOutcome}

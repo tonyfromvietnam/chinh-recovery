@@ -8,13 +8,13 @@ const DAY_LABEL = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", 
 const TEMPLATE_OPTIONS = ["upper", "lower", "football", "zone2", "rest"];
 const DEFAULT_TEMPLATE = { mon: "upper", tue: "lower", wed: "football", thu: "upper", fri: "lower", sat: "football", sun: "rest" };
 
-export default function SettingsModal({ profile, onSave, onClose }) {
+export default function SettingsModal({ profile, footballRecoveryH = null, onSave, onClose }) {
   const [p, setP] = useState(() => ({
     usualWake: "07:00", weekendWake: profile?.wakeByDay?.sat ?? "",
     ...profile, template: profile?.template ?? DEFAULT_TEMPLATE,
   }));
   const set = (k) => (v) => setP((x) => ({ ...x, [k]: v }));
-  const conflicts = spacingConflicts(p);
+  const conflicts = spacingConflicts(p, footballRecoveryH ?? undefined); // your learned football recovery, once known
 
   const save = (e) => {
     e.preventDefault();
