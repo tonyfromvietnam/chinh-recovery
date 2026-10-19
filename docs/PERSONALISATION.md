@@ -197,7 +197,7 @@ Ask questions over your own history in plain English: "Why was Tuesday low?", "A
 
 ## Questions CHINH can answer
 
-Status against the code on `main` (18 Oct 2026). **Now** = answered today; **Build** = needs the numbered feature; **Wait** = needs weeks of data once built.
+Status against the code on `main` (19 Oct 2026). **Now** = answered today; **Build** = needs the numbered feature; **Wait** = needs weeks of data once built.
 
 ### This morning
 | Question | Status | Answered by |
@@ -222,7 +222,6 @@ Status against the code on `main` (18 Oct 2026). **Now** = answered today; **Bui
 | Was this week better than last? | Now | Weekly review |
 | Do I need a deload? | Now | Weekly HRV −5 % / 3+ restoration days |
 | Did I actually do my mobility? | Now | Adherence (plan % and mobility days) |
-| Is my ankle getting better? | Now (stiffness rating) | Weekly review; objective cm/seconds need #8 |
 | Which directions fire too often? | Now | `fired` counts → tune `THRESHOLDS` |
 
 ### About me (learned)
