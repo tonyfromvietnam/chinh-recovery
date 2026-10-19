@@ -8,6 +8,8 @@ Already built and assumed here: 30-day baselines, weekly review, tunable `THRESH
 
 ---
 
+> **Scope change, 19 Oct 2026:** CHINH now uses only strap data plus the quick check-in ratings. **Removed:** #1 calendar, #2 evening check-out, #7 session-quality check, #8 ankle tests and #9 experiments. **Moved:** #6 football recovery comes back with #11, from heart rate. Habit effects now use strap-derived tags (late bedtime; "big day" from active energy in #12). The sections below are kept for reference.
+
 ## Ranked additions
 
 | # | Feature | What CHINH learns about you | Effort | New data |

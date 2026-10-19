@@ -1,10 +1,9 @@
-/* M5 — What CHINH has learned about you: defaults → learned values, habit effects, score check, baseline shifts. */
+/* M5 — What CHINH has learned about you from the strap: sleep need, body clock, bedtime effects, baseline shifts. */
 import React, { useMemo, useState } from "react";
 import { Sparkles, TrendingUp, TrendingDown } from "lucide-react";
 import { Card, CardHeader, Chips, VERDICT_TONE } from "./ui.jsx";
 import {
-  baselineMap, tagEffects, estimateSleepNeed, chronotype, footballRecoveryProfile, predictiveCheck, baselineShift,
-  OUTCOMES, TAG_LABELS, TARGETS, LOAD, LEARNING,
+  baselineMap, tagEffects, estimateSleepNeed, chronotype, baselineShift, OUTCOMES, TAG_LABELS, TARGETS, LEARNING,
 } from "../engine.js";
 
 const hm = (h) => `${Math.floor(h)} h ${String(Math.round((h % 1) * 60)).padStart(2, "0")} m`;
@@ -46,8 +45,6 @@ export default function InsightsCard({ history, today }) {
   const bmap = useMemo(() => baselineMap(history), [history]);
   const sleep = useMemo(() => estimateSleepNeed(history, bmap), [history, bmap]);
   const chrono = useMemo(() => chronotype(history), [history]);
-  const football = useMemo(() => footballRecoveryProfile(history, bmap), [history, bmap]);
-  const predictive = useMemo(() => predictiveCheck(history), [history]);
   const shift = useMemo(() => baselineShift(history, today), [history, today]);
   const effects = useMemo(() => tagEffects(history, today, { outcome, lag, bmap }), [history, today, outcome, lag, bmap]);
   const meta = OUTCOMES[outcome];
@@ -69,11 +66,9 @@ export default function InsightsCard({ history, today }) {
         <p className="mt-2 text-xs text-slate-400">Resting HR has shifted {shift.rhr.direction} ({shift.rhr.delta > 0 ? "+" : ""}{shift.rhr.delta} bpm) since {shift.rhr.sinceDate}.</p>
       )}
 
-      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Learned label="Sleep need" value={sleep.hours != null ? hm(sleep.hours) : null} fallback={`${TARGETS.sleepNeedH} h`}
           n={sleep.n} needed={sleep.needed} note="Nights before a morning with energy ≥ 4 and normal HRV" />
-        <Learned label="Football recovery" value={football.hours != null ? `${football.hours} h` : null} fallback={`${LOAD.defaultFootballRecoveryH} h`}
-          n={football.n} needed={football.needed} note="Time until HRV and resting HR are back after a match" />
         <Learned label="Body clock" value={chrono.ready ? `${chrono.type} (mid-sleep ${chrono.msfsc})` : null} fallback="Not known"
           n={Math.min(chrono.nFree, LEARNING.chronotypeMinFree) + Math.min(chrono.nWork, LEARNING.chronotypeMinWork)}
           needed={LEARNING.chronotypeMinFree + LEARNING.chronotypeMinWork}
@@ -83,8 +78,8 @@ export default function InsightsCard({ history, today }) {
       <div className="mt-6">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold text-slate-200">What your habits do to you</p>
-            <p className="text-xs text-slate-500">Days with vs without each evening tag, last 90 days. Needs {LEARNING.tagMinEach} of each.</p>
+            <p className="text-sm font-semibold text-slate-200">What late nights do to you</p>
+            <p className="text-xs text-slate-500">Nights in bed after 23:30 vs earlier (from the strap's bedtimes), last 90 days. Needs {LEARNING.tagMinEach} of each.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Chips label="Outcome" value={outcome} onChange={setOutcome}
@@ -108,31 +103,10 @@ export default function InsightsCard({ history, today }) {
             ))}
           </ul>
         ) : (
-          <p className="mt-3 text-sm text-slate-400">Use the evening check-out to tag days (alcohol, late caffeine, late dinner, stress). Effects appear here.</p>
+          <p className="mt-3 text-sm text-slate-400">Needs bed and wake times from the morning Shortcut (v2). Effects appear here once there are enough nights.</p>
         )}
       </div>
 
-      <div className="mt-6">
-        <p className="text-sm font-semibold text-slate-200">Does your score predict good sessions?</p>
-        {predictive.ready ? (
-          <>
-            <ul className="mt-2 space-y-1">
-              {predictive.rows.map((r) => (
-                <li key={r.key} className="grid grid-cols-[140px_1fr_48px] items-center gap-3 text-xs">
-                  <span className="text-slate-300">{r.label}</span>
-                  <span className="h-1.5 overflow-hidden rounded-full bg-slate-700/50">
-                    <span className="block h-full rounded-full" style={{ width: `${Math.abs(r.r) * 100}%`, background: r.r >= 0 ? "#22d3ee" : "#fb5a6e" }} />
-                  </span>
-                  <span className="text-right font-mono tabular-nums text-slate-300">{r.r}</span>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2 text-xs text-slate-500">Spearman correlation with session quality across {predictive.n} sessions. The score weights stay 35/35/20/10: changing them is your decision.</p>
-          </>
-        ) : (
-          <p className="mt-1 text-xs text-slate-400">Rate sessions in "Log session". <Progress n={predictive.n} needed={predictive.needed} /></p>
-        )}
-      </div>
     </Card>
   );
 }

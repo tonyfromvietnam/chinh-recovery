@@ -1,5 +1,6 @@
-/* M3 — Training load, the 7-day HRV trend and the train / cap / reduce / recover decision. */
-import { isNum, mean, stdev, round1, shiftKey, daysBetween, WEEKDAYS, toMin } from "./util.js";
+/* M3 — The 7-day HRV trend and the train / cap / reduce / recover decision.
+   Training load comes back in M7.1, computed from the strap's heart-rate zones (no manual logging). */
+import { isNum, mean, stdev, round1, shiftKey, WEEKDAYS } from "./util.js";
 import { usableForLearning } from "./confidence.js";
 import { SESSION_DEFAULTS, isHardSession } from "./brief.js";
 
@@ -8,12 +9,8 @@ export const LOAD = {
   normalRangeMinNights: 14,
   trendMinNights: 4,
   swcSd: 0.5, // smallest worthwhile change, in SD of ln(HRV)
-  loadSpikeRatio: 1.5,
-  chronicMinSessions: 4,
-  monotonyHigh: 2,
   lowerBeforeFootballH: 48,
   defaultFootballRecoveryH: 48,
-  freshWindowH: 48,
   rhrConfirmDays: 2,
 };
 
@@ -50,36 +47,6 @@ export function rhrRun(history, today, baselineRhr, delta, todayRhr) {
   return run;
 }
 
-/* ---------- Session load (Foster session-RPE) ---------- */
-export const sessionLoad = (s) => (s && isNum(s.rpe) && isNum(s.minutes) ? Math.round(s.rpe * s.minutes) : 0);
-
-export function dailyLoads(history, from, to) {
-  const byDate = new Map(history.map((h) => [h.date, sessionLoad(h.session)]));
-  const out = [];
-  for (let d = from; d <= to; d = shiftKey(d, 1)) out.push({ date: d, load: byDate.get(d) || 0 });
-  return out;
-}
-
-export function loadSummary(history, today) {
-  const week = dailyLoads(history, shiftKey(today, -6), today);
-  const prior = dailyLoads(history, shiftKey(today, -34), shiftKey(today, -7));
-  const priorSessions = history.filter((h) => h.date >= shiftKey(today, -34) && h.date <= shiftKey(today, -7) && sessionLoad(h.session) > 0).length;
-  const weekLoad = week.reduce((s, d) => s + d.load, 0);
-  const chronic = priorSessions >= LOAD.chronicMinSessions ? Math.round(prior.reduce((s, d) => s + d.load, 0) / 4) : null;
-  const ratio = chronic ? round1(weekLoad / chronic) : null;
-  const loads = week.map((d) => d.load);
-  const sd = stdev(loads);
-  const monotony = weekLoad > 0 ? round1(sd > 0 ? mean(loads) / sd : 10) : null;
-  return {
-    week: weekLoad, chronic4wkAvg: chronic, ratio,
-    spike: ratio != null && ratio > LOAD.loadSpikeRatio,
-    monotony, monotonyHigh: monotony != null && monotony > LOAD.monotonyHigh,
-    strain: monotony != null ? Math.round(weekLoad * monotony) : null,
-    sessions: history.filter((h) => h.date > shiftKey(today, -7) && h.date <= today && sessionLoad(h.session) > 0).length,
-    days: dailyLoads(history, shiftKey(today, -27), today),
-  };
-}
-
 /* ---------- Weekly template spacing ---------- */
 export function spacingConflicts(profile, footballRecoveryH = LOAD.defaultFootballRecoveryH) {
   const t = profile?.template;
@@ -103,27 +70,11 @@ export function spacingConflicts(profile, footballRecoveryH = LOAD.defaultFootba
 }
 const cap = (d) => d[0].toUpperCase() + d.slice(1);
 
-/* ---------- Freshness per area (Fitbod-style, simplified) ---------- */
-export function freshness(history, today, footballRecoveryH = LOAD.defaultFootballRecoveryH) {
-  const areas = { upper: ["upper"], lower: ["lower", "football"], ankle: ["lower", "football"] };
-  const out = {};
-  for (const [area, types] of Object.entries(areas)) {
-    const last = [...history].reverse().find((h) => h.date <= today && h.session && types.includes(h.session.type) && sessionLoad(h.session) > 0);
-    if (!last) { out[area] = { state: "fresh", hoursSince: null }; continue; }
-    const start = toMin(last.session.start) ?? 18 * 60;
-    const hoursSince = Math.max(0, Math.round((daysBetween(last.date, today) * 1440 + 8 * 60 - start) / 60));
-    const need = last.session.type === "football" ? footballRecoveryH : LOAD.freshWindowH;
-    out[area] = { state: hoursSince < need ? "recovering" : "fresh", hoursSince, needH: need, after: last.session.type };
-  }
-  return out;
-}
-
 /* ---------- The decision ---------- */
 const name = (t) => SESSION_DEFAULTS[t]?.label ?? "Training";
 
 export function trainingDecision({ trend, result, planned, ankleHip, rhrDays = 0, override = null, sleepHours = null, ankleStop = 4, hrvStopZ = -1.5, hrvAdjustZ = -1, pushScore = 80 }) {
   const hard = isHardSession(planned);
-  const why = [];
   if (override) return { decision: "recover", label: "Recover", detail: "You marked today as ill or high stress: walk, mobility, early night.", why: ["Override set"] };
   if (planned === "rest") return { decision: "as-planned", label: "Rest day", detail: "Rest as planned: easy walk and the mobility list.", why: ["Rest day in your template"] };
 
@@ -148,12 +99,13 @@ export function trainingDecision({ trend, result, planned, ankleHip, rhrDays = 0
     return { decision: "cap", label: "Cap at RPE 8", detail: "One low morning with a normal trend: train, but no max efforts.",
       why: [`HRV ${result.hrvZ} SD under normal today`, `7-day trend ${band === "unknown" ? "not ready" : "in range"}`] };
   }
+  const football = planned === "football" ? " Do the FIFA 11+ warm-up first (about a third fewer injuries)." : "";
   if (band === "above" && isNum(sleepHours) && sleepHours >= 7 && result?.score >= pushScore) {
-    return { decision: "push", label: "Push", detail: hard ? "Attempt top sets or go full intensity." : "Good day for extra Zone 2.",
+    return { decision: "push", label: "Push", detail: (hard ? "Attempt top sets or go full intensity." : "Good day for extra Zone 2.") + football,
       why: [`7-day HRV ${trend.avg7} ms above your range`, `Score ${result.score}%`, `${sleepHours} h sleep`] };
   }
-  why.push(band === "in" ? `7-day HRV ${trend.avg7} ms within your ${trend.low}–${trend.high} ms range` : "No warning signs");
-  return { decision: "as-planned", label: "As planned", detail: hard ? `${name(planned)} session as planned.` : "As planned.", why };
+  const why = [band === "in" ? `7-day HRV ${trend.avg7} ms within your ${trend.low}–${trend.high} ms range` : "No warning signs"];
+  return { decision: "as-planned", label: "As planned", detail: (hard ? `${name(planned)} session as planned.` : "As planned.") + football, why };
 }
 
 /* Rewrites the training block from the decision and the planned session */
@@ -171,4 +123,3 @@ export function applyDecision(schedule, decision, planned) {
     return { ...i, type: i.type === "mobility" && d !== "reduce" ? "training" : i.type, title: `${n} session${suffix}`, detail: decision.detail };
   });
 }
-

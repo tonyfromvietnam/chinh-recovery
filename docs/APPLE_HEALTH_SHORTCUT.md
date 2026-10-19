@@ -80,7 +80,7 @@ Tap ▶︎ once. iOS asks for Health permission: allow all three types.
 
 ## 2b. Upgrade to v2 (10 min, recommended)
 
-v2 makes the numbers more trustworthy and turns on the calendar-aware plan. Every part is optional, and old links keep working.
+v2 makes the numbers more trustworthy: overnight-only HRV, and bed and wake times for your body clock and sleep need. Every part is optional, and old links keep working.
 
 **HRV: overnight only, with a reading count.** CHINH marks a day "high confidence" only when HRV is overnight with 2+ readings.
 1. In the HRV **Find Health Samples** (step 1), change the date filter to **Start Date is after** → *Start of Today*. Add **Date** → Current Date → **Adjust Date** → *Get Start of Day*, then press-and-hold the filter date → Select Variable.
@@ -91,24 +91,13 @@ v2 makes the numbers more trustworthy and turns on the calendar-aware plan. Ever
 4. **Bed time:** duplicate that Find, then set **Sort by Start Date**, **Oldest First**, **Limit 1**. Add **Get Details** → *Start Date* → **Format Date** (Custom `HH:mm`) → **Set Variable** `Bed`.
 5. **Wake time:** duplicate it again, then set **Sort by End Date**, **Latest First**, **Limit 1**. Add **Get Details** → *End Date* → **Format Date** (`HH:mm`) → **Set Variable** `Wake`.
 
-**Calendar: busy times only (optional).** Titles never leave your phone.
-6. **Find Calendar Events** where **Start Date is today**. Pick your work and personal calendars.
-7. **Repeat with Each**:
-   - **If** *Repeat Item → Title* **contains** `football` (the keyword in CHINH settings):
-     - **Format Date** of *Start Date* (Custom `HHmm`) → **Set Variable** `FB`.
-   - **Otherwise:**
-     - **Text** `[Start Date as HHmm]-[End Date as HHmm]` → **Add to Variable** `Busy`.
-   - **End If**
-8. **End Repeat**, then **Combine Text** `Busy` with separator `,`.
-
 **New link** (step 13):
 ```
-https://chinh-recovery.vercel.app/#hrv=[HRV]&hrvn=[HRVn]&hw=o&rhr=[RHR]&sleep=[Sleep]&bed=[Bed]&wake=[Wake]&busy=[Combined Text]&fb=[FB]
+https://chinh-recovery.vercel.app/#hrv=[HRV]&hrvn=[HRVn]&hw=o&rhr=[RHR]&sleep=[Sleep]&bed=[Bed]&wake=[Wake]
 ```
-Add **URL Encode** before **Open URLs** if a calendar is included.
 
 Test it without the Shortcut:
-`https://chinh-recovery.vercel.app/#hrv=58&hrvn=3&hw=o&rhr=54&sleep=7.4&bed=23:05&wake=07:01&busy=0930-1030,1400-1500`
+`https://chinh-recovery.vercel.app/#hrv=58&hrvn=3&hw=o&rhr=54&sleep=7.4&bed=23:05&wake=07:01`
 
 ## 3. What happens when it runs
 

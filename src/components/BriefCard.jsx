@@ -1,6 +1,6 @@
-/* M2 — Morning brief: answers today's questions with a number on every row. */
+/* M2 — Morning brief: training call, bedtime and cut-offs, focus and a fact. Strap data + quick ratings only. */
 import React from "react";
-import { Dumbbell, Droplet, Utensils, Moon, Target, Lightbulb, FlaskConical, Settings } from "lucide-react";
+import { Dumbbell, Moon, Target, Lightbulb, Settings } from "lucide-react";
 import { Card, Eyebrow, GhostButton } from "./ui.jsx";
 import { SESSION_DEFAULTS } from "../engine.js";
 
@@ -26,16 +26,16 @@ export function BriefSetupCard({ onOpenSettings }) {
       <Eyebrow>Morning brief</Eyebrow>
       <h2 className="mt-1 font-display text-2xl font-semibold text-slate-100">Set up your brief</h2>
       <p className="mt-2 max-w-2xl text-sm text-slate-300">
-        Add your weight, wake time and weekly training plan. CHINH then answers each morning: what to train, how much water,
-        what and when to eat, when to go to bed, and the one thing to focus on.
+        Add your wake time and weekly training plan. CHINH then answers each morning: what to train,
+        when to go to bed (with coffee, dinner and screens-off times), and the one thing to focus on.
       </p>
       <GhostButton onClick={onOpenSettings} className="mt-4 w-fit"><Settings size={15} /> Open settings</GhostButton>
     </Card>
   );
 }
 
-export default function BriefCard({ brief, archetype, result, onLogSession, onOpenSettings }) {
-  const { decision, planned, water, nutrition, bedtime, cutoffs, focus, fact, experiment } = brief;
+export default function BriefCard({ brief, archetype, result, onOpenSettings }) {
+  const { decision, planned, bedtime, cutoffs, focus, fact } = brief;
   const plannedLabel = planned ? SESSION_DEFAULTS[planned]?.label ?? planned : null;
   const tone = DECISION_TONE[decision?.decision] ?? "#94a3b8";
   return (
@@ -49,7 +49,6 @@ export default function BriefCard({ brief, archetype, result, onLogSession, onOp
           <p className="text-sm text-slate-300">{focus.title}: {focus.action}</p>
         </div>
         <div className="flex gap-2">
-          <GhostButton onClick={onLogSession}><Dumbbell size={15} /> Log session</GhostButton>
           <button onClick={onOpenSettings} aria-label="Settings" className="rounded-lg border border-white/10 p-2 text-slate-400 hover:bg-white/5 hover:text-slate-100">
             <Settings size={16} />
           </button>
@@ -68,22 +67,6 @@ export default function BriefCard({ brief, archetype, result, onLogSession, onOp
               <p className="text-slate-400">Add your weekly plan in settings to get a train / cap / reduce / recover call.</p>
             )}
           </Row>
-          <Row icon={Droplet} label="Water">
-            <p><span className="font-display text-xl font-semibold tabular-nums text-slate-100">{water.litres} L</span>{" "}
-              <span className="text-slate-400">{water.parts.map((p) => `${p.litres} ${p.label.toLowerCase()}`).join(" + ")}</span></p>
-            <p className="font-mono text-[11px] text-slate-500">500 ml on waking · taper after 20:00 · pale-straw urine</p>
-          </Row>
-          <Row icon={Utensils} label={`Food · ${nutrition.dayType} day`}>
-            {nutrition.proteinG ? (
-              <p><span className="tabular-nums">{nutrition.proteinG} g protein</span> ({nutrition.perMealG} g × 4) ·{" "}
-                <span className="tabular-nums">{nutrition.carbsG[0]}–{nutrition.carbsG[1]} g carbs</span></p>
-            ) : (
-              <p className="text-slate-400">Add your weight in settings for protein and carb targets.</p>
-            )}
-            <ul className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-[11px] text-slate-400">
-              {nutrition.meals.map((m) => <li key={m.id}><span className="text-slate-200">{m.time}</span> {m.label}</li>)}
-            </ul>
-          </Row>
         </div>
         <div>
           <Row icon={Moon} label="Tonight">
@@ -101,11 +84,6 @@ export default function BriefCard({ brief, archetype, result, onLogSession, onOp
             <p>{focus.action}</p>
             <p className="font-mono text-[11px] text-slate-500">{focus.why}</p>
           </Row>
-          {experiment && (
-            <Row icon={FlaskConical} label="Experiment today">
-              <p>{experiment.label}</p>
-            </Row>
-          )}
         </div>
       </div>
 

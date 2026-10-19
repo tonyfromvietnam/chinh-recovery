@@ -6,6 +6,14 @@ The build plan for everything in `FEATURE_RESEARCH.md` and `PERSONALISATION.md`,
 
 Background reading: `FEATURE_RESEARCH.md` (the science), `PERSONALISATION.md` (what's learned from you), `SIMILAR_PRODUCTS.md` (what others do).
 
+> **Scope change, 19 Oct 2026.** CHINH now uses only what the Helio Strap measures plus the quick check-in ratings. These parts of M1–M6 were built and then **removed**; their sections below are kept as history only. Do not rebuild them.
+> - **M1:** calendar-aware schedule, evening check-out.
+> - **M2:** water, protein/carb and meal targets, weight, weather.
+> - **M3:** session logging, RPE load, monotony, freshness.
+> - **M4:** ankle tests (all of it).
+> - **M5:** football recovery profile (returns in M7.1 from heart rate), score-vs-session check, evening-tag habit effects. Habit effects now use strap-derived tags only.
+> - **M6:** experiments (all of it).
+
 ---
 
 ## 0. Ground rules (apply to every milestone)
@@ -435,7 +443,7 @@ export function experimentResult(history, experiment)     // reuses tagEffects m
 
 **Scope rule from here on:** new data comes only from what the Amazfit Helio Strap measures, via Zepp → Apple Health → Shortcut.
 - **Removed from the plan:** blood tests, Hevy or other training-app imports, phone jump tests, an AI chat, a native iPhone app. CHINH stays a website (hosted on Vercel).
-- **Kept:** the quick self-ratings already built (soreness, energy, evening check-out, session rating, ankle tests). The score and the learning depend on them.
+- **Kept:** the quick check-in ratings (soreness, ankle/hip, energy, sleep quality, ill / high-stress). They are 30 % of the score and the only signal for muscle fatigue.
 
 **What the strap can give us through Apple Health:**
 
@@ -473,10 +481,10 @@ export function personalMaxHr(history, profile)   // profile.maxHr if set, else 
 export function zoneMinutes(counts, hri = 60)    // counts → minutes per zone
 export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z × z (z = 1..5)
 ```
-- **Load source:** `loadSummary` uses `hrLoad` when both windows (this week, prior 4 weeks) have it on ≥ 80 % of training days; otherwise it falls back to session-RPE. The card says which source it's using. Never mix the two in one ratio.
-- **Auto-detected sessions:** if yesterday's `hrLoad` ≥ `HR.sessionMin` (default 60) and no session was logged, store `session: { type: template[day], auto: true, minutes: Z2+ minutes }`. RPE and quality stay optional.
-- **Learning:** football recovery and freshness use auto-detected football days too.
-- **Tests:** zone conversion, TRIMP, source selection (no mixing), auto-session only when nothing was logged, max-HR percentile.
+- **Load summary:** `hrLoadSummary` compares this week's `hrLoad` with the 4 weeks before. It's advisory only, and starts once the prior 4 weeks have ≥ 4 days with HR data. There's no manual RPE fallback.
+- **Auto-detected sessions:** if yesterday's `hrLoad` ≥ `HR.sessionMin` (default 60), store `session: { type: template[day], auto: true, minutes: Z2+ minutes }`. Nothing is entered by hand.
+- **Learning:** bring back the football recovery profile (hours until HRV and resting HR return after a match), using auto-detected football days.
+- **Tests:** zone conversion, TRIMP, load summary threshold, auto-session detection, max-HR percentile, football recovery from auto-detected days.
 
 ### M7.2 Steps and active energy
 - **Vitals strip:** shows yesterday's steps and active energy, against your 30-day median.

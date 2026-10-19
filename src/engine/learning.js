@@ -1,16 +1,14 @@
 /* M5 — Learning about you. Each function returns a value only once its confidence rule is met;
    until then it reports progress ("5/8 days"). Nothing here changes the score weights. */
-import { isNum, mean, stdev, median, round1, shiftKey, daysBetween, isWeekend, toMin, fromMin, eveningMin, isHHMM, welch, spearman, clamp } from "./util.js";
+import { isNum, mean, stdev, median, round1, shiftKey, isWeekend, toMin, fromMin, eveningMin, isHHMM, welch, clamp } from "./util.js";
 import { usableForLearning } from "./confidence.js";
-import { computeBaselines, calculateRecovery } from "../engine.js";
+import { computeBaselines } from "../engine.js";
 
 export const LEARNING = {
   initNights: 19,
   sleepNeedMinNights: 20, sleepNeedQualifyEnergy: 4, sleepNeedHrvZ: -0.5,
   chronotypeMinFree: 4, chronotypeMinWork: 8,
-  footballMinMatches: 4, footballLookaheadDays: 4, footballHrvZ: -0.5, footballRhrMargin: 2,
   tagMinEach: 8, tagWindowDays: 90,
-  predictiveMinSessions: 20,
   shiftRefDays: [90, 42], shiftMinRef: 20, shiftMinMonitor: 14,
   cusumK: 0.5, cusumH: 5,
   chronotypeAnchor: 3 * 60 + 30, chronotypeMaxShiftMin: 60,
@@ -44,7 +42,6 @@ export const OUTCOMES = {
   energy: { label: "Next-day energy", unit: "/5", higherBetter: true },
   nextLowerSoreness: { label: "Next-day lower-body soreness", unit: "/5", higherBetter: false },
   bedTime: { label: "Bedtime that night", unit: "min", higherBetter: false },
-  sessionQuality: { label: "Session quality", unit: "/5", higherBetter: true },
 };
 
 export function outcomeOn(key, day, bmap) {
@@ -59,12 +56,11 @@ export function outcomeOn(key, day, bmap) {
     case "energy": return fresh && isNum(day.energy) ? day.energy : null;
     case "nextLowerSoreness": return fresh && isNum(day.lower) ? day.lower : null;
     case "bedTime": return isHHMM(day.bedTime) ? eveningMin(day.bedTime) : null;
-    case "sessionQuality": return isNum(day.session?.quality) ? day.session.quality : null;
     default: return null;
   }
 }
 
-/* Outcome after day D: lag 0 = same day (session quality), 1 = next morning, 3 = mean of the next three mornings */
+/* Outcome after day D: 1 = next morning, 3 = mean of the next three mornings */
 export function outcomeAfter(key, date, byDate, bmap, lag = 1) {
   if (lag === 0) return outcomeOn(key, byDate.get(date), bmap);
   const vals = [];
@@ -75,12 +71,19 @@ export function outcomeAfter(key, date, byDate, bmap, lag = 1) {
   return vals.length ? round1(mean(vals)) : null;
 }
 
-/* ---------- Tags ---------- */
+/* ---------- Tags ----------
+   Only tags the strap's own data can set. "late-bed" comes from the bedtime the Shortcut sends;
+   M7.2 adds "big-day" from active energy. */
+export const TAG_LABELS = {
+  "late-bed": "Bedtime after 23:30",
+  "big-day": "Big activity day",
+};
+
 export function tagsForDay(day, byDate) {
-  const tags = new Set(day.evening?.tags || []);
-  if (day.session?.type === "football") tags.add("football");
+  const tags = new Set();
   const next = byDate.get(shiftKey(day.date, 1));
   if (isHHMM(next?.bedTime) && eveningMin(next.bedTime) > eveningMin("23:30")) tags.add("late-bed");
+  if (day.bigDay) tags.add("big-day");
   return tags;
 }
 
@@ -95,14 +98,16 @@ export function tagEffects(history, today, { outcome = "nextHrvPct", lag = 1, bm
   const byDate = byDateMap(history);
   const bm = bmap || baselineMap(history);
   const from = shiftKey(today, -LEARNING.tagWindowDays);
-  const tracked = history.filter((h) => h.date >= from && h.date < today && (h.evening || h.session) && usableForLearning(h));
+  // A day is "tracked" when tomorrow's bedtime is known, so "without the tag" means a real normal night
+  const tracked = history.filter((h) => h.date >= from && h.date < today && usableForLearning(h)
+    && isHHMM(byDate.get(shiftKey(h.date, 1))?.bedTime));
   const tagSets = new Map(tracked.map((d) => [d.date, tagsForDay(d, byDate)]));
   const all = new Set([...tagSets.values()].flatMap((s) => [...s]));
   const meta = OUTCOMES[outcome];
   const rows = [...all].map((tag) => {
     const withV = [], without = [];
     for (const d of tracked) {
-      const v = outcomeAfter(outcome, d.date, byDate, bm, outcome === "sessionQuality" ? 0 : lag);
+      const v = outcomeAfter(outcome, d.date, byDate, bm, lag);
       if (!isNum(v)) continue;
       (tagSets.get(d.date).has(tag) ? withV : without).push(v);
     }
@@ -156,54 +161,6 @@ export function chronotype(history) {
 export const chronotypeShiftMin = (msfscMin) =>
   isNum(msfscMin) ? clamp(Math.round((msfscMin - LEARNING.chronotypeAnchor) / 5) * 5, 0, LEARNING.chronotypeMaxShiftMin) : 0;
 
-/* ---------- Football recovery profile ---------- */
-export function footballRecoveryProfile(history, bmap = null) {
-  const bm = bmap || baselineMap(history);
-  const byDate = byDateMap(history);
-  const matches = history.filter((d) => d.session?.type === "football" && bm.get(d.date));
-  const hours = [];
-  let censored = 0;
-  for (const m of matches) {
-    const b = bm.get(m.date);
-    const start = toMin(m.session.start) ?? 19 * 60;
-    let found = null;
-    for (let k = 1; k <= LEARNING.footballLookaheadDays; k++) {
-      const d = byDate.get(shiftKey(m.date, k));
-      if (!d || !usableForLearning(d) || !isNum(d.rhr)) continue;
-      const z = lnZ(d.hrv, b);
-      if (z != null && z >= LEARNING.footballHrvZ && d.rhr <= b.rhrMean + LEARNING.footballRhrMargin) {
-        const wake = toMin(d.wakeTime) ?? 7 * 60;
-        found = Math.round((k * 1440 + wake - start) / 60);
-        break;
-      }
-    }
-    if (found != null) hours.push(found); else censored++;
-  }
-  const n = hours.length + censored;
-  const ready = n >= LEARNING.footballMinMatches;
-  return { n, needed: LEARNING.footballMinMatches, censored, ready,
-    hours: ready ? (censored > hours.length ? LEARNING.footballLookaheadDays * 24 : Math.round(median(hours))) : null };
-}
-
-/* ---------- Does the score predict your sessions? ---------- */
-export function predictiveCheck(history) {
-  const days = history.filter((d) => isNum(d.session?.quality) && isNum(d.hrv) && isNum(d.rhr) && isNum(d.sleepHours) && usableForLearning(d));
-  const n = days.length;
-  if (n < LEARNING.predictiveMinSessions) return { ready: false, n, needed: LEARNING.predictiveMinSessions, rows: [] };
-  const rowsByKey = {};
-  const q = [];
-  for (const d of days) {
-    const b = computeBaselines(history, d.date, { hrvBaseline: d.hrv, rhrBaseline: d.rhr });
-    const r = calculateRecovery({ sleepQuality: 6, upper: 2, lower: 2, ankleHip: 2, energy: 3, ...d }, b);
-    r.parts.forEach((p) => { (rowsByKey[p.key] ||= { key: p.key, label: p.label, xs: [] }).xs.push(p.value); });
-    (rowsByKey.score ||= { key: "score", label: "Overall score", xs: [] }).xs.push(r.score);
-    q.push(d.session.quality);
-  }
-  const rows = Object.values(rowsByKey).map((r) => ({ key: r.key, label: r.label, r: Math.round(spearman(r.xs, q) * 100) / 100, n }))
-    .sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
-  return { ready: true, n, needed: LEARNING.predictiveMinSessions, rows };
-}
-
 /* ---------- Baseline shift (CUSUM) ---------- */
 function cusum(values, refMean, refSd) {
   let sp = 0, sn = 0, startP = null, startN = null;
@@ -250,12 +207,10 @@ export function learnProfile(history, today) {
   const bmap = baselineMap(history);
   const sleep = estimateSleepNeed(history, bmap);
   const chrono = chronotype(history);
-  const football = footballRecoveryProfile(history, bmap);
   return {
     sleepNeedH: sleep.hours, sleepNeedN: sleep.n,
     chronotypeMSF: chrono.ready ? chrono.msfsc : null, chronotypeMin: chrono.ready ? chrono.msfscMin : null,
     chronotypeType: chrono.ready ? chrono.type : null, socialJetlagH: chrono.ready ? chrono.socialJetlagH : null,
-    footballRecoveryH: football.hours, footballN: football.n,
     updatedOn: today,
   };
 }

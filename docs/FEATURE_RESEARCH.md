@@ -13,6 +13,8 @@ The app answers eight daily questions:
 7. What am I lacking?
 8. Something interesting about my body today.
 
+
+> **Scope note, 19 Oct 2026:** CHINH now uses only Helio Strap data plus quick check-in ratings. Sections 3 (water) and 4 (food) and the evening-tag ideas are kept as research only; they're no longer in the app. Bedtime, cut-offs, the training decision, focus and facts remain.
 ---
 
 ## 0. What the data can and can't tell us

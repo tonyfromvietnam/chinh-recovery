@@ -5,33 +5,26 @@ import {
 import {
   Moon, HeartPulse, Activity, Sun, Dumbbell, Brain, Wind, ShoppingCart,
   BedDouble, Footprints, ClipboardCheck, X, Zap, BookOpen, Utensils,
-  Target, AlertOctagon, SlidersHorizontal, CheckCircle2, RefreshCw, CalendarRange, Cloud, CloudOff, LogOut, Mail, Settings, Info,
+  Target, AlertOctagon, SlidersHorizontal, CheckCircle2, RefreshCw, CalendarRange, Cloud, CloudOff, LogOut, Mail, Settings,
 } from "lucide-react";
 import {
   planDay, parseSyncHash, parseBackfillHash, mergeBackfill, upsertDay, dateKey, weeklyReview,
   getArchetype, MOBILITY_DAY_MIN_DRILLS, mergeHistories, changedDays, latestRatings,
-  eveningTags, learnProfile, spacingConflicts, LOAD,
+  learnProfile,
 } from "./engine.js";
 import { supabase, pullDays, pushDays, pullProfile, pushProfile } from "./supabase.js";
 import { Card, Eyebrow, MiniRing, Checkbox, Chips } from "./components/ui.jsx";
 import BriefCard, { BriefSetupCard } from "./components/BriefCard.jsx";
-import EveningCard from "./components/EveningCard.jsx";
-import SessionModal from "./components/SessionModal.jsx";
 import SettingsModal from "./components/SettingsModal.jsx";
-import LoadCard from "./components/LoadCard.jsx";
-import AnkleCard from "./components/AnkleCard.jsx";
 import InsightsCard from "./components/InsightsCard.jsx";
-import ExperimentsCard from "./components/ExperimentsCard.jsx";
 
 /* =========================================================================
    Storage (on this device only — wrapped so private mode never crashes)
    ========================================================================= */
 const KEYS = {
   history: "chinh-history", checkin: "chinh-checkin", done: (d) => `chinh-done-${d}`, sync: "chinh-last-sync",
-  profile: "chinh-profile", weather: "chinh-weather",
+  profile: "chinh-profile",
 };
-const LONDON = { lat: 51.51, lon: -0.13 };
-const EVENING_FROM_HOUR = 19;
 const load = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } };
 
@@ -265,7 +258,7 @@ function VitalsStrip({ c, result, baselines, sleepDebt }) {
   );
 }
 
-function ScheduleTimeline({ items, done, toggle, accent, calendar }) {
+function ScheduleTimeline({ items, done, toggle, accent }) {
   const completed = items.filter((i) => done[i.id]).length;
   const totalMin = items.reduce((s, i) => s + i.dur, 0);
   const fmtDur = (m) => (m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ` ${m % 60}m` : ""}` : `${m}m`);
@@ -275,8 +268,7 @@ function ScheduleTimeline({ items, done, toggle, accent, calendar }) {
         <div>
           <Eyebrow>Today's action plan</Eyebrow>
           <h2 className="mt-1 font-display text-2xl font-semibold text-slate-100">Hour-by-hour schedule</h2>
-          <p className="text-xs text-slate-400">{items.length} blocks · {fmtDur(totalMin)} planned
-            {calendar?.busy?.length ? ` · fitted around ${calendar.busy.length} calendar block${calendar.busy.length === 1 ? "" : "s"}` : ""}</p>
+          <p className="text-xs text-slate-400">{items.length} blocks · {fmtDur(totalMin)} planned</p>
         </div>
         <div className="flex items-center gap-3">
           <MiniRing pct={items.length ? completed / items.length : 0} color={accent} />
@@ -303,12 +295,6 @@ function ScheduleTimeline({ items, done, toggle, accent, calendar }) {
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <p className={`font-medium ${isDone ? "text-slate-500 line-through" : "text-slate-100"}`}>{item.title}</p>
                     <span className="rounded-md px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider" style={{ color: meta.color, background: `${meta.color}1a` }}>{fmtDur(item.dur)}</span>
-                    {item.movedFrom && (
-                      <span className="rounded-md bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">
-                        moved from {item.movedFrom}{item.shortened ? ", shortened" : ""}
-                      </span>
-                    )}
-                    {item.fromCalendar && <span className="rounded-md bg-white/5 px-1.5 py-0.5 font-mono text-[10px] text-slate-400">from your calendar</span>}
                   </div>
                   <p className={`mt-0.5 text-sm ${isDone ? "text-slate-600" : "text-slate-400"}`}>{item.detail}</p>
                 </div>
@@ -318,9 +304,6 @@ function ScheduleTimeline({ items, done, toggle, accent, calendar }) {
           );
         })}
       </ol>
-      {calendar?.dropped?.length > 0 && (
-        <p className="mt-3 text-xs text-amber-200/80">No room today for: {calendar.dropped.map((d) => d.title).join(", ")}.</p>
-      )}
     </Card>
   );
 }
@@ -700,7 +683,7 @@ function CheckInModal({ initial, synced, history, today, profile, onClose, onSub
 export default function CHINHDashboard() {
   const today = dateKey();
   const [history, setHistory] = useState(() => load(KEYS.history, []));
-  // Per-day fields (calendar, override) live on the day record, never in the carried-over check-in
+  // Per-day fields (override) live on the day record, never in the carried-over check-in
   const [checkin, setCheckin] = useState(() => {
     const { busy, fixtures, override, ...c } = { ...DEFAULT_CHECKIN, ...load(KEYS.checkin, {}) };
     return c;
@@ -708,11 +691,9 @@ export default function CHINHDashboard() {
   const [done, setDone] = useState(() => load(KEYS.done(today), {}));
   const [lastSync, setLastSync] = useState(() => load(KEYS.sync, null));
   const [profile, setProfileState] = useState(() => load(KEYS.profile, null));
-  const [maxTempC, setMaxTempC] = useState(() => { const w = load(KEYS.weather, null); return w?.date === today ? w.maxTempC : null; });
   const [modalOpen, setModalOpen] = useState(false);
   const [syncOpen, setSyncOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [sessionOpen, setSessionOpen] = useState(false);
   const [restedPrompt, setRestedPrompt] = useState(false);
   const [session, setSession] = useState(null);
   const [cloud, setCloud] = useState({ state: supabase ? "idle" : "off" });
@@ -723,12 +704,9 @@ export default function CHINHDashboard() {
   const learned = useMemo(() => learnProfile(history, today), [history, today]);
   const fullProfile = useMemo(() => (profile ? { ...profile, learned } : null), [profile, learned]);
   const dayCheckin = useMemo(() => ({ ...checkin, override: todayDay?.override ?? null }), [checkin, todayDay]);
-  const busyToday = useMemo(() => todayDay?.busy ?? [], [todayDay]);
-  const fixturesToday = useMemo(() => todayDay?.fixtures ?? [], [todayDay]);
 
-  const day = useMemo(() => planDay({
-    checkin: dayCheckin, history, today, profile: fullProfile, busy: busyToday, fixtures: fixturesToday, maxTempC,
-  }), [dayCheckin, history, today, fullProfile, busyToday, fixturesToday, maxTempC]);
+  const day = useMemo(() => planDay({ checkin: dayCheckin, history, today, profile: fullProfile }),
+    [dayCheckin, history, today, fullProfile]);
   const { result, archetype, baselines, directives, schedule, drills } = day;
 
   const [notice, setNotice] = useState(null);
@@ -736,30 +714,16 @@ export default function CHINHDashboard() {
   const setProfile = (p) => {
     const next = { ...p, updatedAt: Date.now() };
     delete next.learned; // computed from history every time, never stored
+    // Fields from features removed in the strap-only scope
+    for (const k of ["weightKg", "weightLog", "sweatRateLph", "injuredSide", "footballKeyword", "experiment", "location"]) delete next[k];
     setProfileState(next);
   };
   useEffect(() => { if (profile) save(KEYS.profile, profile); }, [profile]);
 
-  // Today's maximum temperature (Open-Meteo, no key) for the water target. Fails quietly.
-  useEffect(() => {
-    if (maxTempC != null) return;
-    const loc = profile?.location || LONDON;
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&daily=temperature_2m_max&timezone=Europe%2FLondon&forecast_days=1`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((j) => {
-        const t = j?.daily?.temperature_2m_max?.[0];
-        if (Number.isFinite(t)) { setMaxTempC(t); save(KEYS.weather, { date: today, maxTempC: t }); }
-      })
-      .catch(() => {});
-  }, [today]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  /* Save today's check-in. `extra` holds per-day fields (calendar, override) that must not carry over. */
+  /* Save today's check-in. `extra` holds per-day fields (override) that must not carry over. */
   const commitCheckin = (next, extra = {}) => {
     const override = "override" in extra ? extra.override : todayDay?.override ?? null;
-    const nextDay = planDay({
-      checkin: { ...next, override }, history, today, profile: fullProfile,
-      busy: extra.busy ?? busyToday, fixtures: extra.fixtures ?? fixturesToday, maxTempC,
-    });
+    const nextDay = planDay({ checkin: { ...next, override }, history, today, profile: fullProfile });
     setCheckin(next);
     const fields = {
       date: today, hrv: next.hrv, rhr: next.rhr, sleepHours: next.sleepHours, sleepQuality: next.sleepQuality,
@@ -771,11 +735,8 @@ export default function CHINHDashboard() {
     setHistory((h) => upsertDay(h, Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined))));
   };
 
-  // Small patches to today's record: evening check-out, session, ankle test, experiment compliance
-  const patchToday = (patch) => setHistory((h) => upsertDay(h, { date: today, ...patch, updatedAt: Date.now() }));
-
   // Apple Health links from the Shortcuts:
-  //   backfill → #history=date,hrv,rhr,sleep[,hrvn[,bed,wake]];…   morning sync → #hrv=…&rhr=…&sleep=…&hrvn=…&bed=…&busy=…
+  //   backfill → #history=date,hrv,rhr,sleep[,hrvn[,bed,wake]];…   morning sync → #hrv=…&rhr=…&sleep=…&hrvn=…&bed=…&wake=…
   useEffect(() => {
     const hash = window.location.hash;
     const clearHash = () => window.history.replaceState(null, "", window.location.pathname + window.location.search);
@@ -793,19 +754,17 @@ export default function CHINHDashboard() {
     const synced = parseSyncHash(hash);
     if (!synced) return;
     clearHash(); // keep numbers out of the address bar and browser history
-    const { busy, fixtures, ...measures } = synced;
+    const measures = synced;
     const sync = { date: today, at: new Date().toISOString(), fields: Object.keys(measures) };
     setLastSync(sync);
     save(KEYS.sync, sync);
     // No form: check in straight away and carry over the last soreness and energy ratings.
     const next = { ...checkin, ...measures };
-    commitCheckin(next, { busy: busy ?? [], fixtures: fixtures ?? [] });
+    commitCheckin(next);
     const parts = [
       measures.hrv != null && `HRV ${measures.hrv} ms${measures.hrvCount != null ? ` (${measures.hrvCount} readings)` : ""}`,
       measures.rhr != null && `RHR ${measures.rhr} bpm`,
       measures.sleepHours != null && `sleep ${measures.sleepHours} h${measures.bedTime ? ` (${measures.bedTime}–${measures.wakeTime ?? "?"})` : ""}`,
-      busy?.length && `${busy.length} calendar block${busy.length === 1 ? "" : "s"}`,
-      fixtures?.length && "football fixture",
     ].filter(Boolean).join(" · ");
     setNotice(`Synced from Apple Health: ${parts}. Soreness, ankle and energy carried over from ${next.ratedOn ? shortDay(next.ratedOn) : "your last check-in"}.`);
     if ((next.sleepQualityRatedOn ?? next.ratedOn) !== today) setRestedPrompt(true);
@@ -947,9 +906,6 @@ export default function CHINHDashboard() {
   const syncedToday = lastSync?.date === today;
   const checkedInToday = history.some((h) => h.date === today && Number.isFinite(h.score));
   const hasCheckins = history.some((h) => Number.isFinite(h.score));
-  const showEvening = now.getHours() >= EVENING_FROM_HOUR || !!todayDay?.evening;
-  const footballRecoveryH = learned.footballRecoveryH ?? LOAD.defaultFootballRecoveryH;
-  const conflicts = useMemo(() => spacingConflicts(profile, footballRecoveryH), [profile, footballRecoveryH]);
 
   const review = useMemo(() => weeklyReview(history, today), [history, today]);
 
@@ -1017,7 +973,7 @@ export default function CHINHDashboard() {
 
         <div className="mt-6">
           {day.brief
-            ? <BriefCard brief={day.brief} archetype={archetype} result={result} onLogSession={() => setSessionOpen(true)} onOpenSettings={() => setSettingsOpen(true)} />
+            ? <BriefCard brief={day.brief} archetype={archetype} result={result} onOpenSettings={() => setSettingsOpen(true)} />
             : <BriefSetupCard onOpenSettings={() => setSettingsOpen(true)} />}
         </div>
 
@@ -1035,37 +991,8 @@ export default function CHINHDashboard() {
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
-          <ScheduleTimeline items={schedule} done={done} toggle={toggle} accent={archetype.color} calendar={day.calendar} />
+          <ScheduleTimeline items={schedule} done={done} toggle={toggle} accent={archetype.color} />
           <MobilityPanel drills={drills} done={done} toggle={toggle} />
-        </div>
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          {showEvening && (
-            <EveningCard key={todayDay?.evening?.at ?? "new"} evening={todayDay?.evening ?? null} cutoffs={day.brief?.cutoffs ?? null}
-              onSave={(ev) => patchToday({ evening: { ...ev, tags: eveningTags(ev, day.brief?.cutoffs), at: new Date().toISOString() } })} />
-          )}
-          <ExperimentsCard active={profile?.experiment ?? null} today={today} history={history}
-            assignment={day.brief?.experiment ?? null} complied={todayDay?.experiment?.complied ?? null}
-            onStart={(id) => setProfile({ ...(profile || {}), experiment: { id, start: today } })}
-            onStop={() => setProfile({ ...(profile || {}), experiment: null })}
-            onComply={(v) => day.brief?.experiment && patchToday({ experiment: { ...day.brief.experiment, complied: v } })} />
-          {!showEvening && (
-            <Card className="p-5 sm:p-6">
-              <Eyebrow>Evening check-out</Eyebrow>
-              <p className="mt-2 flex items-start gap-2 text-sm text-slate-400">
-                <Info size={16} className="mt-0.5 shrink-0" />
-                Opens after {EVENING_FROM_HOUR}:00: stress, alcohol, last caffeine and last meal. Four taps that let CHINH learn what affects your recovery.
-              </p>
-            </Card>
-          )}
-        </div>
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <LoadCard load={day.load} freshness={day.freshness} conflicts={conflicts} />
-          <AnkleCard ankle={day.ankle} onSaveTest={(t) => {
-            patchToday({ ankleTest: t });
-            if (profile && profile.injuredSide !== t.injured) setProfile({ ...profile, injuredSide: t.injured });
-          }} />
         </div>
 
         <div className="mt-4">
@@ -1091,12 +1018,8 @@ export default function CHINHDashboard() {
           onClose={() => setModalOpen(false)} onSubmit={handleSubmit} />
       )}
       {settingsOpen && (
-        <SettingsModal profile={profile} footballRecoveryH={footballRecoveryH} onClose={() => setSettingsOpen(false)}
+        <SettingsModal profile={profile} onClose={() => setSettingsOpen(false)}
           onSave={(p) => { setProfile({ ...(profile || {}), ...p }); setSettingsOpen(false); }} />
-      )}
-      {sessionOpen && (
-        <SessionModal planned={day.planned} existing={todayDay?.session ?? null} onClose={() => setSessionOpen(false)}
-          onSave={(s) => { patchToday({ session: s }); setSessionOpen(false); }} />
       )}
     </div>
   );

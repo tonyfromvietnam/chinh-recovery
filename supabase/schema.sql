@@ -39,7 +39,7 @@ begin
   end if;
 end $$;
 
--- Profile (weight, wake times, weekly plan, active experiment): one row per user. Added with the morning brief.
+-- Profile (wake times, weekly training plan): one row per user. Added with the morning brief.
 create table if not exists public.profile (
   user_id    uuid        primary key default auth.uid() references auth.users (id) on delete cascade,
   data       jsonb       not null,

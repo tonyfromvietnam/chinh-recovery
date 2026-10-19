@@ -1,52 +1,31 @@
-/* M2 — The morning brief: bedtime, cut-offs, water, food, one focus and a fact.
+/* M2 — The morning brief: training call, bedtime and cut-offs, one focus and a fact.
    Every number traces back to docs/FEATURE_RESEARCH.md. */
 import { toMin, fromMin, eveningMin, isHHMM, isNum, mean, round1, weekday, shiftKey, hashSeed, clamp } from "./util.js";
 
 export const TARGETS = {
   sleepNeedH: 8, sleepLatencyMin: 15, debtRepayMinPerNight: 30, hardTomorrowMin: 15, maxShiftEarlierMin: 45, maxShiftLaterMin: 30,
   caffeineCutoffH: 8.8, preworkoutCutoffH: 13.2, lastMealBeforeBedH: 3, showerBeforeBedH: [1, 2], screensOffMin: 60,
-  waterBaseL: 2.0, waterPerTrainingHourL: [0.5, 0.75], warmDayC: 25, warmDayExtraL: 0.5, rhrFlagExtraL: 0.5, sweatReplaceFactor: 1.25,
-  proteinGPerKg: 1.6, proteinMeals: 4,
-  carbsGPerKg: { rest: [3, 4], lift: [4, 5], football: [5, 7] },
-  weightTrendAlpha: 0.1,
   defaultWake: "07:00",
 };
 
 export const SESSION_DEFAULTS = {
-  upper: { label: "Upper-body", minutes: 60, start: "17:30" },
-  lower: { label: "Lower-body", minutes: 60, start: "17:30" },
-  football: { label: "Football", minutes: 90, start: "19:00" },
-  zone2: { label: "Zone 2", minutes: 40, start: "17:30" },
-  other: { label: "Training", minutes: 60, start: "17:30" },
-  rest: { label: "Rest", minutes: 0, start: null },
+  upper: { label: "Upper-body" },
+  lower: { label: "Lower-body" },
+  football: { label: "Football" },
+  zone2: { label: "Zone 2" },
+  rest: { label: "Rest" },
 };
 const HARD = new Set(["upper", "lower", "football"]);
 export const isHardSession = (t) => HARD.has(t);
 
 /* ---------- Profile helpers ---------- */
-export function plannedSession(profile, date, fixtures = []) {
-  if (fixtures.some((f) => f.type === "football")) return "football";
+export function plannedSession(profile, date) {
   return profile?.template?.[weekday(date)] ?? null;
 }
 
 export function wakeFor(profile, date) {
   const w = profile?.wakeByDay?.[weekday(date)];
   return isHHMM(w) ? w : isHHMM(profile?.usualWake) ? profile.usualWake : TARGETS.defaultWake;
-}
-
-/* Exponentially weighted weight trend (MacroFactor-style): one heavy weigh-in barely moves it */
-export function trendWeight(weightLog, today) {
-  const rows = (weightLog || []).filter((r) => isNum(r.kg) && r.date <= today).sort((a, b) => a.date.localeCompare(b.date));
-  if (!rows.length) return null;
-  let t = rows[0].kg;
-  for (const r of rows.slice(1)) t += TARGETS.weightTrendAlpha * (r.kg - t);
-  return { kg: round1(t), n: rows.length, latest: rows[rows.length - 1] };
-}
-
-export function bodyWeight(profile, today) {
-  const trend = trendWeight(profile?.weightLog, today);
-  if (trend && trend.n >= 3) return trend.kg;
-  return isNum(profile?.weightKg) ? profile.weightKg : trend?.kg ?? null;
 }
 
 /* ---------- Bedtime ---------- */
@@ -90,51 +69,8 @@ export function eveningCutoffs(bedtime) {
   };
 }
 
-/* ---------- Water ---------- */
-export function waterTarget({ sessionMinutes = 0, maxTempC = null, rhrFlag = false, sweatRateLph = null }) {
-  const T = TARGETS;
-  const parts = [{ label: "Base", litres: T.waterBaseL }];
-  if (sessionMinutes > 0) {
-    const h = sessionMinutes / 60;
-    const rate = isNum(sweatRateLph) ? sweatRateLph * T.sweatReplaceFactor : mean(T.waterPerTrainingHourL);
-    parts.push({ label: `Training (${sessionMinutes} min)`, litres: round1(rate * h) });
-  }
-  if (isNum(maxTempC) && maxTempC >= T.warmDayC) parts.push({ label: `Warm day (${Math.round(maxTempC)} °C)`, litres: T.warmDayExtraL });
-  if (rhrFlag) parts.push({ label: "Resting HR up", litres: T.rhrFlagExtraL });
-  return { litres: round1(parts.reduce((s, p) => s + p.litres, 0)), parts };
-}
-
-/* ---------- Food ---------- */
-export const dayTypeFor = (planned) => (planned === "football" ? "football" : planned === "upper" || planned === "lower" ? "lift" : "rest");
-
-export function nutritionTargets({ weightKg, dayType = "rest", wake = TARGETS.defaultWake, sessionStart = null, sessionMinutes = 0, cutoffs = null }) {
-  const T = TARGETS;
-  const out = { dayType, proteinG: null, perMealG: null, carbsG: null, meals: [] };
-  if (isNum(weightKg)) {
-    out.proteinG = Math.round(T.proteinGPerKg * weightKg);
-    out.perMealG = Math.round(out.proteinG / T.proteinMeals);
-    const [lo, hi] = T.carbsGPerKg[dayType];
-    out.carbsG = [Math.round((lo * weightKg) / 10) * 10, Math.round((hi * weightKg) / 10) * 10];
-  }
-  const w = toMin(wake);
-  out.meals.push({ id: "breakfast", label: "Breakfast", time: fromMin(w + 60) });
-  const s = toMin(sessionStart);
-  if (dayType !== "rest" && s != null) {
-    out.meals.push({ id: "pre", label: "Pre-training meal", time: fromMin(s - 150) });
-    out.meals.push({ id: "post", label: "Protein after training", time: fromMin(s + sessionMinutes + 30) });
-  } else {
-    out.meals.push({ id: "lunch", label: "Lunch", time: fromMin(Math.max(w + 300, 12 * 60 + 30)) });
-  }
-  if (cutoffs) {
-    out.meals.push({ id: "dinner", label: "Dinner finished by", time: cutoffs.lastMeal });
-    if (dayType !== "rest") out.meals.push({ id: "presleep", label: "Optional 30–40 g slow protein", time: fromMin(eveningMin(cutoffs.bedtime) - 60) });
-  }
-  out.meals.sort((a, b) => toMin(a.time) - toMin(b.time));
-  return out;
-}
-
 /* ---------- One focus ---------- */
-export function dailyFocus({ result, debt = 0, trend = null, checkin = {}, load = null, bedtime = null, avgBed7 = null, lastBed = null }) {
+export function dailyFocus({ result, debt = 0, trend = null, checkin = {}, bedtime = null, avgBed7 = null, lastBed = null }) {
   const c = [];
   if (debt >= 1) c.push({ sev: debt / 2, id: "f-sleep", title: "Sleep", why: `${debt} h sleep debt across the last 3 nights.`,
     action: bedtime ? `In bed by ${bedtime} tonight.` : "Get to bed 30 min earlier tonight." });
@@ -147,8 +83,6 @@ export function dailyFocus({ result, debt = 0, trend = null, checkin = {}, load 
     why: `Resting HR ${result.rhrDelta} bpm above your normal.`, action: "500 ml water before 10:00; watch for illness." });
   if (checkin.ankleHip >= 3) c.push({ sev: (checkin.ankleHip - 2) * 0.6, id: "f-ankle", title: "Ankle",
     why: `Ankle/hip stiffness ${checkin.ankleHip}/5.`, action: "Knee-to-Wall Pulses + Ankle CARs before any training." });
-  if (load?.spike) c.push({ sev: 1.2, id: "f-load", title: "Training load",
-    why: `This week's load is ${load.ratio}× your 4-week average.`, action: "Don't add sessions this week." });
   if (avgBed7 && lastBed) {
     const drift = eveningMin(lastBed) - eveningMin(avgBed7);
     if (drift >= 45) c.push({ sev: 1, id: "f-regularity", title: "Regularity",
@@ -215,7 +149,7 @@ export const FACTS = [
     source: "Pietilä et al. 2018, JMIR Mental Health" },
 ];
 
-export function factContext({ checkin = {}, result = {}, debt = 0, trend = null, planned = null, today, irregular = false, alcoholLastNight = false, stress = false }) {
+export function factContext({ checkin = {}, result = {}, debt = 0, trend = null, planned = null, today, irregular = false }) {
   const month = Number(today.slice(5, 7));
   return {
     shortSleep: isNum(checkin.sleepHours) && checkin.sleepHours < 7,
@@ -227,7 +161,7 @@ export function factContext({ checkin = {}, result = {}, debt = 0, trend = null,
     hrvHigh: trend?.band === "above" || (isNum(result.hrvZ) && result.hrvZ >= 1.5),
     winter: month >= 10 || month <= 3,
     weekend: ["sat", "sun"].includes(weekday(today)),
-    irregular, alcohol: alcoholLastNight, stress,
+    irregular, alcohol: false, stress: false,
   };
 }
 
