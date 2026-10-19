@@ -32,6 +32,8 @@ Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
 - Original scoring and schedule spec: @docs/knowledge/recovery-algorithm.md
 - Feature research and roadmap (read before building new features): `docs/FEATURE_RESEARCH.md`
 - Personalisation plan (population defaults → values learned from the owner's data): `docs/PERSONALISATION.md`
+- **Build plan: `docs/TECH_SPEC.md`** — milestones M0–M7, one PR each, in order. Follow its ground rules.
+- What similar products do and what to copy or avoid: `docs/SIMILAR_PRODUCTS.md`
 - Personal training context lives in `CLAUDE.local.md` (git-ignored, on the owner's machine only).
 
 ## Conventions
