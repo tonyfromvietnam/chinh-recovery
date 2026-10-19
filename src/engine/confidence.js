@@ -4,14 +4,23 @@ import { isNum } from "./util.js";
 
 export const CONFIDENCE = {
   highMinHrvCount: 2, // overnight readings needed for "high"
+  spo2ArtefactMin: 88, // one overnight oxygen minimum under this is most likely a loose strap (M7.3)
 };
+
+/* Data-quality notes that don't change the level */
+function notesFor(day) {
+  return isNum(day.spo2Min) && day.spo2Min < CONFIDENCE.spo2ArtefactMin
+    ? [`Overnight oxygen dipped to ${day.spo2Min} % once: most likely a loose strap, not a health reading.`]
+    : [];
+}
 
 export const OVERRIDE_LABELS = { ill: "ill", stress: "high stress" };
 
 export function dataConfidence(day) {
-  if (!day) return { level: "low", reasons: ["No data"] };
-  if (day.override) return { level: "low", reasons: [`Marked as ${OVERRIDE_LABELS[day.override] || day.override}`] };
-  if (!isNum(day.hrv)) return { level: "low", reasons: ["No HRV synced"] };
+  if (!day) return { level: "low", reasons: ["No data"], notes: [] };
+  const notes = notesFor(day);
+  if (day.override) return { level: "low", reasons: [`Marked as ${OVERRIDE_LABELS[day.override] || day.override}`], notes };
+  if (!isNum(day.hrv)) return { level: "low", reasons: ["No HRV synced"], notes };
 
   const reasons = [];
   if (day.hrvWindow !== "overnight") {
@@ -21,7 +30,7 @@ export function dataConfidence(day) {
   }
   if (!isNum(day.sleepHours)) reasons.push("No sleep data");
 
-  return reasons.length ? { level: "medium", reasons } : { level: "high", reasons: [`${day.hrvCount} overnight HRV readings and a full sleep record`] };
+  return reasons.length ? { level: "medium", reasons, notes } : { level: "high", reasons: [`${day.hrvCount} overnight HRV readings and a full sleep record`], notes };
 }
 
 /* A day that may feed baselines and learning */

@@ -99,6 +99,60 @@ https://chinh-recovery.vercel.app/#hrv=[HRV]&hrvn=[HRVn]&hw=o&rhr=[RHR]&sleep=[S
 Test it without the Shortcut:
 `https://chinh-recovery.vercel.app/#hrv=58&hrvn=3&hw=o&rhr=54&sleep=7.4&bed=23:05&wake=07:01`
 
+## 2c. More from your strap (M7, optional, 15 min)
+
+These add training load from your heart rate, steps and active energy, overnight blood oxygen, and sleep stages. Every part is optional: add only the lines you want, and CHINH ignores anything missing.
+
+**One-time check first: how often the strap records heart rate during exercise.**
+1. After a workout with the strap on, open **Health → Browse → Heart → Heart Rate → Show All Data**.
+2. Look at the times of the Zepp entries during the workout. If they're about a minute apart, you're done. If they're 30 s apart, add `&hri=30` to the link; if 5 minutes, `&hri=300`.
+
+**Turn on sharing:** **Health → Sharing → Apps → Zepp**: **Heart Rate**, **Steps**, **Active Energy**, **Blood Oxygen**.
+
+**"Yesterday" filter.** Several Finds below use it: **Start Date is in the last 1 day** isn't quite right, so build it once:
+**Date** → Current Date → **Adjust Date** *Get Start of Day* → **Set Variable** `Today0`. Then **Adjust Date** `Today0` *Subtract 1 day* → **Set Variable** `Yday0`.
+Each "yesterday" Find uses **Start Date is after** `Yday0` **and Start Date is before** `Today0`.
+
+**Heart-rate zones (training load).** CHINH shows your five zone limits in bpm on its **Training load** card. Until it has learned your max heart rate (10 days of `hrmax`), use 220 − your age as the max: zone 1 is 50–60 % of it, zone 2 60–70 %, zone 3 70–80 %, zone 4 80–90 %, zone 5 90–100 %.
+1. **Find Health Samples** → Type **Heart Rate**, yesterday filter, **Source is Zepp**, and **Value is between** zone 1's limits (for example 92 and 110).
+2. **Count** → *Items* → **Set Variable** `Z1`.
+3. Duplicate the pair four times for `Z2` … `Z5`, changing only the Value limits.
+4. **Max heart rate:** the same Find without a Value filter, **Sort by Value**, **Largest First**, **Limit 1** → **Get Details** *Value* → **Set Variable** `HRmax`.
+
+**Steps and active energy (yesterday).**
+5. **Find Health Samples** → **Steps**, yesterday filter, Source is Zepp → **Calculate Statistics** *Sum* → **Round Number** → **Set Variable** `Steps`.
+6. The same for **Active Energy** → `Kcal`.
+
+**Overnight blood oxygen.**
+7. **Find Health Samples** → **Blood Oxygen Saturation**, **Start Date is after** *yesterday 18:00* (as for sleep in 2b), Source is Zepp → **Calculate Statistics** *Average* → **Set Variable** `SpO2`.
+8. The same Find → **Calculate Statistics** *Minimum* → `SpO2min`. Health may give `0.96` instead of `96`; CHINH reads both.
+
+**Sleep stages (only if Zepp writes them).** Check **Health → Sleep → Show All Data** for Core, Deep and REM entries from Zepp. If there are none, skip this.
+9. Duplicate the sleep Find from 2b and add **Value is Deep** → **Calculate Statistics** *Sum* of durations → **Set Variable** `Deep`. Repeat with **REM** and **Core**. Minutes or seconds both work.
+
+**New link** (add to the end of the v2 link, step 13):
+```
+&z=[Z1],[Z2],[Z3],[Z4],[Z5]&hrmax=[HRmax]&st=[Steps]&ae=[Kcal]&spo2=[SpO2]&spo2min=[SpO2min]&deep=[Deep]&rem=[REM]&core=[Core]
+```
+
+**Where it's stored:**
+- **Yesterday's record:** zones, max HR, steps and energy describe yesterday, so they're saved on yesterday's day.
+- **Auto-detected sessions:** a day with a load of 60 or more counts as a training session, typed from your weekly plan.
+- **Today's record:** oxygen and sleep stages are about last night, so they're saved on today.
+
+**Test it without the Shortcut:**
+`https://chinh-recovery.vercel.app/#hrv=58&hrvn=3&hw=o&rhr=54&sleep=7.4&z=12,30,25,10,2&hrmax=181&st=9450&ae=640&spo2=96&spo2min=92&deep=62&rem=95&core=240`
+
+**What CHINH does with it:**
+
+| Signal | Used for | Never used for |
+|---|---|---|
+| Heart-rate zones | Training load card (this week vs the last 4); automatic sessions; how long you take to recover from football | Changing today's decision: the load ratio is advice only |
+| Max HR | Your zone limits (98th percentile of 90 days, so one glitchy spike doesn't count) | |
+| Steps, active energy | Vitals vs your 30-day median; the "big day" habit tag; an easy walk on restoration days after < 5,000 steps | The score |
+| Blood oxygen | Backing up a raised resting-HR warning when it's 2+ points under your normal | A warning on its own; a night with a minimum under 88 % is treated as a loose strap |
+| Sleep stages | A bar on the recovery card | The score or directions: wrist staging isn't accurate enough to act on |
+
 ## 3. What happens when it runs
 
 CHINH opens, saves today's check-in and shows the plan. **There is no form to fill in.** Soreness, ankle/hip stiffness and mental energy carry over from the last time you rated them, and a banner says which day they're from.

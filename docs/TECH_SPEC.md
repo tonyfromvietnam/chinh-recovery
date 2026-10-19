@@ -64,6 +64,12 @@ Existing fields stay. New fields are marked with their milestone.
 | `session` | object \| null | M3 | see 1.4 |
 | `ankleTest` | object \| null | M4 | see 1.5 |
 | `experiment` | `{id, arm}` \| null | M6 | condition assigned for the day |
+| `hrZones` | `[z1…z5]` minutes | M7.1 | yesterday's HR-zone minutes, stored on that day |
+| `hrMax` | bpm | M7.1 | that day's highest HR sample |
+| `session` (auto) | `{type, auto: true, minutes, load}` \| null | M7.1 | set when the day's TRIMP ≥ `HR.sessionMin` |
+| `steps`, `activeKcal` | number | M7.2 | that day's totals |
+| `spo2`, `spo2Min` | % | M7.3 | last night's average and minimum |
+| `stages` | `{deep, core, rem}` minutes | M7.4 | last night, display only |
 
 ### 1.2 Profile (new, M2)
 
@@ -440,6 +446,8 @@ export function experimentResult(history, experiment)     // reuses tagEffects m
 ---
 
 ## M7 — More from your Helio Strap (strap data only)
+
+**Status:** M7.1–M7.4 built (`src/engine/strap.js`, `tests/strap.test.js`, `HrLoadCard`, vitals, sleep-stage bar; Shortcut guide section 2c). `profile.maxHr` is honoured by the engine but has no settings field, since settings stay wake times + weekly plan.
 
 **Scope rule from here on:** new data comes only from what the Amazfit Helio Strap measures, via Zepp → Apple Health → Shortcut.
 - **Removed from the plan:** blood tests, Hevy or other training-app imports, phone jump tests, an AI chat, a native iPhone app. CHINH stays a website (hosted on Vercel).

@@ -54,7 +54,7 @@ docs/                  Apple Health Shortcut guide
 - [x] Morning brief: train / cap / reduce / recover call, bedtime with coffee, dinner, shower and screens-off times, daily focus, fact of the day
 - [x] 7-day HRV trend vs your normal range
 - [x] Learned sleep need and body clock, late-night effects, HRV baseline shifts
-- [ ] M7 More from the Helio Strap: heart-rate training load, steps & active energy, overnight blood oxygen, sleep stages (see `docs/TECH_SPEC.md`)
+- [x] M7 More from the Helio Strap: heart-rate training load, steps & active energy, overnight blood oxygen, sleep stages (Shortcut: `docs/APPLE_HEALTH_SHORTCUT.md` section 2c)
 
 **Scope:** CHINH only uses what the Amazfit Helio Strap measures (via Zepp → Apple Health) plus the quick check-in ratings. It stays a website, hosted on Vercel. Evening check-out, session logging, ankle tests, experiments, water/food targets, calendar and weather were removed on 19 Oct 2026.
 

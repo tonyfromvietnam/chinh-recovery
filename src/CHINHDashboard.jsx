@@ -10,13 +10,14 @@ import {
 import {
   planDay, parseSyncHash, parseBackfillHash, mergeBackfill, upsertDay, dateKey, weeklyReview,
   getArchetype, MOBILITY_DAY_MIN_DRILLS, mergeHistories, changedDays, latestRatings,
-  learnProfile,
+  learnProfile, applyYesterday,
 } from "./engine.js";
 import { supabase, pullDays, pushDays, pullProfile, pushProfile } from "./supabase.js";
 import { Card, Eyebrow, MiniRing, Checkbox, Chips } from "./components/ui.jsx";
 import BriefCard, { BriefSetupCard } from "./components/BriefCard.jsx";
 import SettingsModal from "./components/SettingsModal.jsx";
 import InsightsCard from "./components/InsightsCard.jsx";
+import HrLoadCard from "./components/HrLoadCard.jsx";
 
 /* =========================================================================
    Storage (on this device only — wrapped so private mode never crashes)
@@ -25,6 +26,9 @@ const KEYS = {
   history: "chinh-history", checkin: "chinh-checkin", done: (d) => `chinh-done-${d}`, sync: "chinh-last-sync",
   profile: "chinh-profile",
 };
+/* Overnight strap readings (M7.3/7.4) live on today's record, never in the carried-over check-in */
+const OVERNIGHT_KEYS = ["spo2", "spo2Min", "stages"];
+const overnightOf = (day) => Object.fromEntries(OVERNIGHT_KEYS.filter((k) => day?.[k] != null).map((k) => [k, day[k]]));
 const load = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } };
 
@@ -89,13 +93,39 @@ function ConfidenceBadge({ confidence }) {
       <span className="h-2 w-2 rounded-full" style={{ background: color }} />
       {confidence.level} confidence
       <span className="pointer-events-none absolute right-0 top-5 z-20 hidden w-64 rounded-lg border border-white/10 bg-slate-950 p-2 text-[11px] normal-case text-slate-300 shadow-xl group-hover:block group-focus:block">
-        {confidence.reasons.join(" · ")}
+        {[...confidence.reasons, ...(confidence.notes || [])].join(" · ")}
       </span>
     </span>
   );
 }
 
-function RecoveryCard({ result, archetype, baselines, dateLabel, confidence, baselineNights }) {
+const STAGE_COLOR = { deep: "#6366f1", core: "#38bdf8", rem: "#a78bfa" };
+const hm = (min) => `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} m`;
+
+/* M7.4 — display only: consumer sleep staging isn't accurate enough to score or act on */
+function SleepStages({ stages }) {
+  return (
+    <div className="mt-4">
+      <div className="flex items-baseline justify-between">
+        <span className="font-mono text-[11px] uppercase tracking-[0.14em] text-slate-400">Sleep stages</span>
+        <span className="font-mono text-[11px] text-slate-500">{hm(stages.total)} · not scored</span>
+      </div>
+      <div className="mt-1.5 flex h-2 overflow-hidden rounded-full bg-slate-700/50" role="img"
+        aria-label={stages.parts.map((p) => `${p.label} ${p.min} min`).join(", ")}>
+        {stages.parts.map((p) => <span key={p.key} style={{ width: `${p.pct}%`, background: STAGE_COLOR[p.key] }} />)}
+      </div>
+      <div className="mt-1.5 flex flex-wrap gap-x-3 font-mono text-[11px] text-slate-400">
+        {stages.parts.map((p) => (
+          <span key={p.key} className="flex items-center gap-1">
+            <span className="h-2 w-2 rounded-full" style={{ background: STAGE_COLOR[p.key] }} />{p.label} {hm(p.min)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RecoveryCard({ result, archetype, baselines, dateLabel, confidence, baselineNights, stages }) {
   return (
     <Card className="p-5 sm:p-6">
       <div className="flex items-center justify-between gap-3">
@@ -133,9 +163,11 @@ function RecoveryCard({ result, archetype, baselines, dateLabel, confidence, bas
           );
         })}
       </div>
+      {stages && <SleepStages stages={stages} />}
       {result.sleepQualityStale && (
         <p className="mt-4 font-mono text-[11px] text-amber-200/80">Sleep scored on duration only: quality not rated today.</p>
       )}
+      {confidence?.notes?.map((n) => <p key={n} className="mt-2 font-mono text-[11px] text-amber-200/80">{n}</p>)}
       <p className="mt-4 font-mono text-[11px] text-slate-500">
         {baselines.source === "rolling"
           ? `Baseline: your last ${baselines.days} days (30-day rolling, ln HRV)`
@@ -230,16 +262,27 @@ function TrendCard({ data, isExample }) {
   );
 }
 
-function VitalsStrip({ c, result, baselines, sleepDebt }) {
+const VITALS_GRID = { 5: "sm:grid-cols-3 lg:grid-cols-5", 6: "sm:grid-cols-3 lg:grid-cols-6", 7: "sm:grid-cols-4 lg:grid-cols-7" };
+
+function VitalsStrip({ c, result, baselines, sleepDebt, activity, spo2 }) {
   const sign = (v) => (v > 0 ? `+${v}` : `${v}`);
+  const vsMedian = (v, m, unit) => (m == null ? "Median after 7 days of data" : `${v >= m ? "+" : "−"}${Math.abs(Math.round(((v - m) / m) * 100))} % vs ${Math.round(m).toLocaleString("en-GB")}${unit} median`);
+  const extra = [
+    activity?.steps != null && { label: "Steps · yesterday", value: activity.steps.toLocaleString("en-GB"), unit: "", sub: vsMedian(activity.steps, activity.stepsMedian, ""), icon: Footprints },
+    activity?.activeKcal != null && { label: "Active energy · yesterday", value: activity.activeKcal.toLocaleString("en-GB"), unit: "kcal",
+      sub: activity.bigDay ? `Big day: ${vsMedian(activity.activeKcal, activity.kcalMedian, " kcal")}` : vsMedian(activity.activeKcal, activity.kcalMedian, " kcal"), icon: Zap },
+    spo2?.value != null && { label: "Oxygen · overnight", value: spo2.value, unit: "%",
+      sub: spo2.artefact ? `Min ${spo2.min} %: likely a loose strap` : spo2.baseline != null ? `${sign(Math.round((spo2.value - spo2.baseline) * 10) / 10)} vs ${spo2.baseline} % normal${spo2.min != null ? ` · min ${spo2.min} %` : ""}` : "Normal after 5 nights", icon: Wind },
+  ].filter(Boolean);
   const tiles = [
     { label: "Sleep", value: c.sleepHours.toFixed(1), unit: "h", sub: sleepDebt > 0 ? `${sleepDebt} h debt (3 nights)` : "No sleep debt", icon: Moon },
     { label: "HRV", value: c.hrv, unit: "ms", sub: `${sign(result.hrvZ)} SD vs ${Math.round(baselines.hrv.mean)} ms normal`, icon: HeartPulse },
     { label: "Resting HR", value: c.rhr, unit: "bpm", sub: `${sign(result.rhrDelta)} vs ${Math.round(baselines.rhr.mean)} bpm normal`, icon: Activity },
     { label: "Ankle / hips", value: c.ankleHip, unit: "/5", sub: c.ankleHip >= 4 ? "Stiff — prioritise" : "Manageable", icon: Footprints },
+    ...extra,
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <div className={`grid grid-cols-2 gap-3 ${VITALS_GRID[tiles.length] ?? "lg:grid-cols-4"}`}>
       {tiles.map((t) => {
         const Icon = t.icon;
         return (
@@ -703,7 +746,7 @@ export default function CHINHDashboard() {
   const todayDay = useMemo(() => history.find((h) => h.date === today) || null, [history, today]);
   const learned = useMemo(() => learnProfile(history, today), [history, today]);
   const fullProfile = useMemo(() => (profile ? { ...profile, learned } : null), [profile, learned]);
-  const dayCheckin = useMemo(() => ({ ...checkin, override: todayDay?.override ?? null }), [checkin, todayDay]);
+  const dayCheckin = useMemo(() => ({ ...checkin, ...overnightOf(todayDay), override: todayDay?.override ?? null }), [checkin, todayDay]);
 
   const day = useMemo(() => planDay({ checkin: dayCheckin, history, today, profile: fullProfile }),
     [dayCheckin, history, today, fullProfile]);
@@ -723,7 +766,7 @@ export default function CHINHDashboard() {
   /* Save today's check-in. `extra` holds per-day fields (override) that must not carry over. */
   const commitCheckin = (next, extra = {}) => {
     const override = "override" in extra ? extra.override : todayDay?.override ?? null;
-    const nextDay = planDay({ checkin: { ...next, override }, history, today, profile: fullProfile });
+    const nextDay = planDay({ checkin: { ...next, ...overnightOf(todayDay), ...overnightOf(extra), override }, history, today, profile: fullProfile });
     setCheckin(next);
     const fields = {
       date: today, hrv: next.hrv, rhr: next.rhr, sleepHours: next.sleepHours, sleepQuality: next.sleepQuality,
@@ -754,17 +797,22 @@ export default function CHINHDashboard() {
     const synced = parseSyncHash(hash);
     if (!synced) return;
     clearHash(); // keep numbers out of the address bar and browser history
-    const measures = synced;
-    const sync = { date: today, at: new Date().toISOString(), fields: Object.keys(measures) };
+    const { yesterday, overnight, ...measures } = synced;
+    const sync = { date: today, at: new Date().toISOString(), fields: [...Object.keys(measures), ...Object.keys(yesterday || {}), ...Object.keys(overnight || {})] };
     setLastSync(sync);
     save(KEYS.sync, sync);
+    // Yesterday's heart-rate zones, steps and active energy go on yesterday's record (M7.1/7.2)
+    if (yesterday) setHistory((h) => applyYesterday(h, today, yesterday, profile));
     // No form: check in straight away and carry over the last soreness and energy ratings.
     const next = { ...checkin, ...measures };
-    commitCheckin(next);
+    commitCheckin(next, overnight || {});
     const parts = [
       measures.hrv != null && `HRV ${measures.hrv} ms${measures.hrvCount != null ? ` (${measures.hrvCount} readings)` : ""}`,
       measures.rhr != null && `RHR ${measures.rhr} bpm`,
       measures.sleepHours != null && `sleep ${measures.sleepHours} h${measures.bedTime ? ` (${measures.bedTime}–${measures.wakeTime ?? "?"})` : ""}`,
+      overnight?.spo2 != null && `oxygen ${overnight.spo2} %`,
+      yesterday?.steps != null && `${yesterday.steps.toLocaleString("en-GB")} steps yesterday`,
+      yesterday?.hrZones && "yesterday's heart-rate zones",
     ].filter(Boolean).join(" · ");
     setNotice(`Synced from Apple Health: ${parts}. Soreness, ankle and energy carried over from ${next.ratedOn ? shortDay(next.ratedOn) : "your last check-in"}.`);
     if ((next.sleepQualityRatedOn ?? next.ratedOn) !== today) setRestedPrompt(true);
@@ -979,7 +1027,7 @@ export default function CHINHDashboard() {
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
           <RecoveryCard result={result} archetype={archetype} baselines={baselines} dateLabel={shortDate}
-            confidence={day.confidence} baselineNights={day.baselineNights} />
+            confidence={day.confidence} baselineNights={day.baselineNights} stages={day.stages} />
           <div className="flex min-w-0 flex-col gap-4">
             <DirectionsCard directives={directives} />
             <TrendCard data={trend} isExample={isExample} />
@@ -987,7 +1035,7 @@ export default function CHINHDashboard() {
         </div>
 
         <div className="mt-4">
-          <VitalsStrip c={checkin} result={result} baselines={baselines} sleepDebt={day.sleepDebt} />
+          <VitalsStrip c={checkin} result={result} baselines={baselines} sleepDebt={day.sleepDebt} activity={day.activity} spo2={day.spo2} />
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
@@ -995,7 +1043,8 @@ export default function CHINHDashboard() {
           <MobilityPanel drills={drills} done={done} toggle={toggle} />
         </div>
 
-        <div className="mt-4">
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <HrLoadCard load={day.load} maxHr={day.maxHr} />
           <InsightsCard history={history} today={today} />
         </div>
 
@@ -1018,7 +1067,7 @@ export default function CHINHDashboard() {
           onClose={() => setModalOpen(false)} onSubmit={handleSubmit} />
       )}
       {settingsOpen && (
-        <SettingsModal profile={profile} onClose={() => setSettingsOpen(false)}
+        <SettingsModal profile={profile} footballRecoveryH={learned.footballRecoveryH} onClose={() => setSettingsOpen(false)}
           onSave={(p) => { setProfile({ ...(profile || {}), ...p }); setSettingsOpen(false); }} />
       )}
     </div>
