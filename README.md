@@ -2,7 +2,7 @@
 
 A dark-mode daily recovery dashboard that turns last night's data into directions and an hour-by-hour action plan.
 
-**Live:** https://tonyfromvietnam.github.io/chinh-recovery/
+**Live:** https://chinh-recovery.vercel.app/
 
 ## The pipeline
 
@@ -29,11 +29,11 @@ Set-up guide for the Shortcut: [docs/APPLE_HEALTH_SHORTCUT.md](docs/APPLE_HEALTH
 
 ```bash
 npm install
-npm run dev     # http://localhost:5173/chinh-recovery/
+npm run dev     # http://localhost:5173/
 npm test        # engine unit tests, no extra packages needed
 ```
 
-Every push to `main` runs the tests, builds and deploys to GitHub Pages.
+Every push to `main` is tested and deployed by Vercel (`vercel.json` runs `npm test` before the build). GitHub Actions tests and builds every pull request.
 
 ## Project layout
 
@@ -48,18 +48,15 @@ docs/                  Apple Health Shortcut guide
 
 ## Roadmap
 
-- [x] Apple Health sync via Shortcut
-- [x] Rolling personal baselines and data-driven directions
-- [x] One-time 30-day backfill from Apple Health
-- [x] Sync history across devices (Supabase)
-- [x] M0 Data fixes: 2 years of history, ln(HRV) baselines, overnight HRV, bed/wake times, stale-quality guard
-- [x] M1 Data confidence, ill / high-stress override, calendar-aware plan, evening check-out
-- [x] M2 Morning brief: train call, water, food, bedtime and cut-offs, daily focus, fact of the day
-- [x] M3 Session log, training load, 7-day HRV trend, train / cap / reduce / recover decision
-- [x] M4 Weekly ankle tests, left vs right
-- [x] M5 Learned sleep need, chronotype, football recovery, habit effects, score check, baseline shifts
-- [x] M6 Personal experiments
-- [ ] M7 Blood markers, Hevy import, Ask CHINH, native iPhone app (see `docs/TECH_SPEC.md`)
+- [x] Apple Health sync via Shortcut, 30-day backfill, cloud sync (Supabase)
+- [x] Data quality: 2 years of history, ln(HRV) baselines, overnight HRV, bed/wake times, stale-quality guard
+- [x] Data confidence and the ill / high-stress switch
+- [x] Morning brief: train / cap / reduce / recover call, bedtime with coffee, dinner, shower and screens-off times, daily focus, fact of the day
+- [x] 7-day HRV trend vs your normal range
+- [x] Learned sleep need and body clock, late-night effects, HRV baseline shifts
+- [ ] M7 More from the Helio Strap: heart-rate training load, steps & active energy, overnight blood oxygen, sleep stages (see `docs/TECH_SPEC.md`)
+
+**Scope:** CHINH only uses what the Amazfit Helio Strap measures (via Zepp → Apple Health) plus the quick check-in ratings. It stays a website, hosted on Vercel. Evening check-out, session logging, ankle tests, experiments, water/food targets, calendar and weather were removed on 19 Oct 2026.
 
 ## Privacy
 

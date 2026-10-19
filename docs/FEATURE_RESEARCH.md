@@ -13,6 +13,8 @@ The app answers eight daily questions:
 7. What am I lacking?
 8. Something interesting about my body today.
 
+
+> **Scope note, 19 Oct 2026:** CHINH now uses only Helio Strap data plus quick check-in ratings. Sections 3 (water) and 4 (food) and the evening-tag ideas are kept as research only; they're no longer in the app. Bedtime, cut-offs, the training decision, focus and facts remain.
 ---
 
 ## 0. What the data can and can't tell us
@@ -165,7 +167,7 @@ One focus beats ten flags. For example:
 1. **Measurable from your data:** sleep debt, regularity, hydration estimate, protein (if logged), steps, Zone 2 minutes, mobility streak.
 2. **Seasonal and well-established:** the **NHS advises 10 µg vitamin D daily from October to March** for everyone in the UK, because winter sunlight is too weak. That applies to you right now in London.
    - **Creatine monohydrate 3–5 g/day** is among the best-supported supplements for strength (ISSN position stand). It's optional.
-3. **Needs a blood test:** ferritin/iron, vitamin D level, B12 and lipids can't be read from a wearable. CHINH should remind you once a year to ask your GP, not guess.
+3. **Needs a blood test:** ferritin/iron, vitamin D level, B12 and lipids can't be read from a wearable. That's outside CHINH's scope (strap data only); ask your GP if you want them checked.
 
 ## 8. Ankle–hip rehab, made trackable
 
@@ -216,7 +218,6 @@ Pick a fact **tied to today's data**, with its source. Examples:
 | **V1.2 Today brief** | Bedtime & caffeine/meal cut-offs, water target, protein/carb targets, one focus, fact of the day | Weight, weekly template, wake time; Shortcut adds sleep start/end, active energy, workouts |
 | **V1.3 Training load** | Decision matrix with planned session, session-RPE load, monotony, 48 h spacing check, ankle progression tracker, FIFA 11+ block | Session-RPE tap |
 | **V1.4 Weekly review+** | Extend the existing `weeklyReview` with regularity, load chart and "what moves your HRV" (n-of-1) | ~8 weeks of tags |
-| **V2 Native iPhone** | HealthKit background sync, widget, evening reminder | Expo + Mac |
 
 ## Sources
 

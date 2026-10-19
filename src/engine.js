@@ -8,26 +8,19 @@
 
 import { clamp01, round1, dateKey, shiftKey, isNum, isHHMM, isWeekend, toMin, fromMin } from "./engine/util.js";
 import { dataConfidence, OVERRIDE_LABELS } from "./engine/confidence.js";
-import { parseBusy, parseFixtures, fitScheduleToCalendar } from "./engine/calendar.js";
 import {
-  plannedSession, wakeFor, bodyWeight, avgBedtime7, targetBedtime, eveningCutoffs, waterTarget, nutritionTargets,
-  dayTypeFor, dailyFocus, factContext, factOfTheDay, applyBriefToSchedule, SESSION_DEFAULTS, isHardSession,
+  plannedSession, wakeFor, avgBedtime7, targetBedtime, eveningCutoffs,
+  dailyFocus, factContext, factOfTheDay, applyBriefToSchedule, isHardSession,
 } from "./engine/brief.js";
-import { hrvTrend, rhrRun, loadSummary, freshness, trainingDecision, applyDecision, LOAD } from "./engine/load.js";
-import { ankleSummary, anklePhysioDirective } from "./engine/ankle.js";
+import { hrvTrend, rhrRun, trainingDecision, applyDecision, LOAD } from "./engine/load.js";
 import { baselineNights, chronotypeShiftMin } from "./engine/learning.js";
-import { experimentById, assignArm } from "./engine/experiments.js";
 
 export { dateKey, shiftKey };
 export * from "./engine/util.js";
 export * from "./engine/confidence.js";
-export * from "./engine/calendar.js";
-export * from "./engine/evening.js";
 export * from "./engine/brief.js";
 export * from "./engine/load.js";
-export * from "./engine/ankle.js";
 export * from "./engine/learning.js";
-export * from "./engine/experiments.js";
 
 export const SLEEP_TARGET_H = 8;
 export const BASELINE_WINDOW_DAYS = 30;
@@ -70,12 +63,6 @@ export function parseSyncHash(hash) {
     const m = parseClockParam(params.get(k));
     if (m) out[field] = m;
   }
-  // v2: calendar busy blocks (times only) and a football fixture
-  const busy = parseBusy(params.get("busy"));
-  if (busy.length) out.busy = busy;
-  const fixtures = parseFixtures(params.get("fb"));
-  if (fixtures.length) out.fixtures = fixtures;
-
   return Object.keys(out).length ? out : null;
 }
 
@@ -280,10 +267,7 @@ export const DIRECTIVE_NAMES = {
   "on-track": "Stay the course",
   override: "Recover (ill / high stress)",
   "hrv-trend": "7-day HRV below range",
-  "load-spike": "Training load spike",
   spacing: "Football tomorrow: legs light",
-  "spacing-recovery": "Still recovering from football",
-  "ankle-physio": "Book a physio check",
 };
 
 export function generateDirectives({ c, result, baselines, history, today, archetypeId }) {
@@ -484,17 +468,14 @@ export function buildMobility(c, archetypeId) {
 }
 
 /* ---------- 8. One call for the whole day ----------
-   Only checkin/history/today are required. `profile` turns on the morning brief, the planned session and
-   everything learned; busy/fixtures (or the same fields on the check-in) fit the plan to the calendar. */
+   Only checkin/history/today are required. `profile` (wake times, weekly plan) turns on the morning brief,
+   the planned-session decision and everything learned. Every input is either strap data or a quick rating. */
 const TODAY_FIELDS = ["hrv", "rhr", "sleepHours", "hrvCount", "hrvWindow", "bedTime", "wakeTime", "override"];
 
-export function planDay({ checkin, history, today, profile = null, busy = null, fixtures = null, maxTempC = null }) {
+export function planDay({ checkin, history, today, profile = null }) {
   const learned = profile?.learned || {};
   const sleepNeedH = isNum(learned.sleepNeedH) ? learned.sleepNeedH : SLEEP_TARGET_H;
-  const footballRecoveryH = isNum(learned.footballRecoveryH) ? learned.footballRecoveryH : LOAD.defaultFootballRecoveryH;
   const override = checkin.override || null;
-  const busyBlocks = busy ?? checkin.busy ?? [];
-  const fx = fixtures ?? checkin.fixtures ?? [];
 
   const baselines = computeBaselines(history, today, checkin);
   const result = calculateRecovery(checkin, baselines, { today, sleepNeedH });
@@ -517,28 +498,13 @@ export function planDay({ checkin, history, today, profile = null, busy = null, 
       action: "Cut training volume by 30–40 % and keep RPE ≤ 7 until it's back in range." });
   }
 
-  const planned = plannedSession(profile, today, fx);
+  const planned = plannedSession(profile, today);
   const tomorrowPlanned = plannedSession(profile, shiftKey(today, 1));
-  const load = loadSummary(history, today);
-  if (load.spike) {
-    directives.push({ id: "load-spike", level: "adjust", title: "Training load spike",
-      why: `This week's load ${load.week} is ${load.ratio}× your 4-week average of ${load.chronic4wkAvg}.`,
-      action: "Keep today's plan but don't add sessions; make the next hard day moderate." });
-  }
   if (planned === "lower" && tomorrowPlanned === "football") {
     directives.push({ id: "spacing", level: "adjust", title: "Football tomorrow: keep legs light",
       why: `Heavy legs today leave about 24 h before football (aim for ${LOAD.lowerBeforeFootballH} h).`,
       action: "Swap to upper body, or halve lower-body volume." });
   }
-  const fresh = freshness(history, today, footballRecoveryH);
-  if (planned === "lower" && fresh.lower.state === "recovering" && fresh.lower.after === "football") {
-    directives.push({ id: "spacing-recovery", level: "adjust", title: "Still recovering from football",
-      why: `${fresh.lower.hoursSince} h since football; you need about ${footballRecoveryH} h.`,
-      action: "Upper body or Zone 2 today; move heavy legs back a day." });
-  }
-  const ankle = ankleSummary(history, today, profile?.injuredSide);
-  const physio = anklePhysioDirective(ankle);
-  if (physio) directives.push(physio);
   if (override) {
     directives = directives.filter((d) => d.id !== "push");
     directives.unshift({ id: "override", level: "stop",
@@ -570,38 +536,23 @@ export function planDay({ checkin, history, today, profile = null, busy = null, 
     const bed = targetBedtime({ wakeTomorrow: wakeFor(profile, shiftKey(today, 1)), sleepNeedH, debtH: debt,
       hardTomorrow: isHardSession(tomorrowPlanned), avgBed7 });
     const cutoffs = eveningCutoffs(bed.time);
-    const training = schedule.find((i) => i.slot === "training");
-    const football = fx.find((f) => f.type === "football");
-    const sessionType = decision?.decision === "recover" ? "rest" : planned;
-    const sessionMinutes = !isHardSession(sessionType) ? 0 : football ? 90 : training?.dur ?? SESSION_DEFAULTS[sessionType].minutes;
-    const sessionStart = football ? fromMin(football.start) : training?.time ?? SESSION_DEFAULTS[sessionType]?.start ?? null;
-    const weightKg = bodyWeight(profile, today);
-    const exp = profile.experiment ? experimentById(profile.experiment.id) : null;
     brief = {
-      planned, tomorrowPlanned, decision, bedtime: bed, cutoffs, weightKg, sleepNeedH,
+      planned, tomorrowPlanned, decision, bedtime: bed, cutoffs, sleepNeedH,
       sleepNeedLearned: isNum(learned.sleepNeedH),
-      water: waterTarget({ sessionMinutes, maxTempC, rhrFlag: result.rhrDelta >= THRESHOLDS.rhrAdjustDelta, sweatRateLph: profile.sweatRateLph }),
-      nutrition: nutritionTargets({ weightKg, dayType: dayTypeFor(sessionType), wake: wakeFor(profile, today), sessionStart, sessionMinutes, cutoffs }),
-      focus: dailyFocus({ result, debt, trend, checkin, load, bedtime: bed.time, avgBed7, lastBed: checkin.bedTime }),
+      focus: dailyFocus({ result, debt, trend, checkin, bedtime: bed.time, avgBed7, lastBed: checkin.bedTime }),
       fact: factOfTheDay(factContext({ checkin, result, debt, trend, planned, today,
         irregular: !!(avgBed7 && checkin.bedTime && Math.abs(toMin(checkin.bedTime) - toMin(avgBed7)) >= 45) }), today),
-      experiment: exp ? assignArm(exp, profile.experiment.start, today, planned) : null,
     };
     schedule = applyBriefToSchedule(schedule, brief);
   }
 
-  // ---- Calendar
-  const cal = fitScheduleToCalendar(schedule, busyBlocks, fx);
-
   return {
-    baselines, result, archetype, directives,
-    schedule: cal.schedule,
-    calendar: { moved: cal.moved, dropped: cal.dropped, busy: busyBlocks, fixtures: fx },
+    baselines, result, archetype, directives, schedule,
     drills: buildMobility(checkin, archetype.id),
     sleepDebt: debt,
     confidence: dataConfidence({ ...checkin, override }),
     baselineNights: baselineNights(withToday, today),
-    trend, planned, decision, load, freshness: fresh, ankle, brief,
+    trend, planned, decision, brief,
   };
 }
 

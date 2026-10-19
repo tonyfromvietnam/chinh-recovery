@@ -1,35 +1,25 @@
-/* M2 — Profile: weight, wake times, weekly template, injured side. Drives the brief and the plan. */
+/* M2 — Profile: wake times and the weekly training plan. Drives the brief and the plan. */
 import React, { useState } from "react";
-import { Check, Scale } from "lucide-react";
-import { Modal, Field, Chips, inputClass, PrimaryButton } from "./ui.jsx";
-import { WEEKDAYS, SESSION_DEFAULTS, spacingConflicts, trendWeight, dateKey } from "../engine.js";
+import { Check } from "lucide-react";
+import { Modal, Field, inputClass, PrimaryButton } from "./ui.jsx";
+import { WEEKDAYS, SESSION_DEFAULTS, spacingConflicts } from "../engine.js";
 
 const DAY_LABEL = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 const TEMPLATE_OPTIONS = ["upper", "lower", "football", "zone2", "rest"];
 const DEFAULT_TEMPLATE = { mon: "upper", tue: "lower", wed: "football", thu: "upper", fri: "lower", sat: "football", sun: "rest" };
 
-export default function SettingsModal({ profile, footballRecoveryH, onSave, onClose }) {
+export default function SettingsModal({ profile, onSave, onClose }) {
   const [p, setP] = useState(() => ({
-    usualWake: "07:00", weekendWake: profile?.wakeByDay?.sat ?? "", footballKeyword: "football", injuredSide: "R",
+    usualWake: "07:00", weekendWake: profile?.wakeByDay?.sat ?? "",
     ...profile, template: profile?.template ?? DEFAULT_TEMPLATE,
   }));
-  const [weighIn, setWeighIn] = useState("");
   const set = (k) => (v) => setP((x) => ({ ...x, [k]: v }));
-  const conflicts = spacingConflicts(p, footballRecoveryH);
-  const today = dateKey();
-  const trend = trendWeight(p.weightLog, today);
-
-  const addWeighIn = () => {
-    const kg = parseFloat(String(weighIn).replace(",", "."));
-    if (!(kg > 30 && kg < 250)) return;
-    const log = [...(p.weightLog || []).filter((r) => r.date !== today), { date: today, kg }].sort((a, b) => a.date.localeCompare(b.date)).slice(-400);
-    setP((x) => ({ ...x, weightLog: log, weightKg: x.weightKg ?? kg }));
-    setWeighIn("");
-  };
+  const conflicts = spacingConflicts(p);
 
   const save = (e) => {
     e.preventDefault();
-    const { weekendWake, ...rest } = p;
+    // Drop fields from features that were removed (weight, sweat rate, injured side, calendar keyword)
+    const { weekendWake, weightKg, weightLog, sweatRateLph, injuredSide, footballKeyword, experiment, ...rest } = p;
     onSave({ ...rest, wakeByDay: weekendWake ? { sat: weekendWake, sun: weekendWake } : {} });
   };
 
@@ -37,16 +27,6 @@ export default function SettingsModal({ profile, footballRecoveryH, onSave, onCl
     <Modal eyebrow="Settings" title="Your profile" onClose={onClose} labelId="settings-title" wide>
       <form className="space-y-6" onSubmit={save}>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field id="set-weight" label="Weight (kg)" hint="Protein, carbs and water targets use your trended weight once you've logged 3 weigh-ins.">
-            <input id="set-weight" type="number" inputMode="decimal" step="0.1" value={p.weightKg ?? ""} placeholder="75"
-              onChange={(e) => set("weightKg")(e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field id="set-weighin" label="Add today's weigh-in" hint={trend ? `Trend ${trend.kg} kg from ${trend.n} weigh-ins` : "Optional, any time"}>
-            <div className="flex gap-2">
-              <input id="set-weighin" type="number" inputMode="decimal" step="0.1" value={weighIn} onChange={(e) => setWeighIn(e.target.value)} className={inputClass} />
-              <button type="button" onClick={addWeighIn} className="flex items-center gap-1 rounded-lg border border-white/10 px-3 text-sm text-slate-300 hover:bg-white/5"><Scale size={14} /> Add</button>
-            </div>
-          </Field>
           <Field id="set-wake" label="Usual wake time">
             <input id="set-wake" type="time" value={p.usualWake || ""} onChange={(e) => set("usualWake")(e.target.value)} className={inputClass} />
           </Field>
@@ -73,22 +53,6 @@ export default function SettingsModal({ profile, footballRecoveryH, onSave, onCl
               {conflicts.map((c) => <li key={`${c.from}-${c.to}-${c.rule}`}>⚠ {c.text}</li>)}
             </ul>
           )}
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <p className="mb-2 text-sm text-slate-300">Injured ankle</p>
-            <Chips label="Injured ankle" value={p.injuredSide} onChange={set("injuredSide")}
-              options={[{ value: "L", label: "Left" }, { value: "R", label: "Right" }]} />
-          </div>
-          <Field id="set-sweat" label="Sweat rate (L/h, optional)"
-            hint="Weigh yourself before and after a football session without drinking: each kg lost ≈ 1 L. Divide by hours played.">
-            <input id="set-sweat" type="number" inputMode="decimal" step="0.1" value={p.sweatRateLph ?? ""}
-              onChange={(e) => set("sweatRateLph")(e.target.value === "" ? null : Number(e.target.value))} className={inputClass} />
-          </Field>
-          <Field id="set-kw" label="Football calendar keyword" hint="Your Shortcut sends a fixture time when an event title contains this. The title itself never leaves your phone.">
-            <input id="set-kw" type="text" value={p.footballKeyword || ""} onChange={(e) => set("footballKeyword")(e.target.value)} className={inputClass} />
-          </Field>
         </div>
 
         <PrimaryButton type="submit"><Check size={17} /> Save profile</PrimaryButton>

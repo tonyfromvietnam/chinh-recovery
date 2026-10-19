@@ -21,7 +21,7 @@ export async function pullDays() {
   return data.map((r) => r.data);
 }
 
-/* Profile (weight, wake times, weekly plan, experiment): one row per user. Needs the `profile` table from
+/* Profile (wake times, weekly training plan): one row per user. Needs the `profile` table from
    supabase/schema.sql; if it isn't there yet, sync carries on with days only. */
 export async function pullProfile() {
   const { data, error } = await supabase.from("profile").select("data").maybeSingle();

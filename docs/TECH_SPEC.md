@@ -6,6 +6,14 @@ The build plan for everything in `FEATURE_RESEARCH.md` and `PERSONALISATION.md`,
 
 Background reading: `FEATURE_RESEARCH.md` (the science), `PERSONALISATION.md` (what's learned from you), `SIMILAR_PRODUCTS.md` (what others do).
 
+> **Scope change, 19 Oct 2026.** CHINH now uses only what the Helio Strap measures plus the quick check-in ratings. These parts of M1–M6 were built and then **removed**; their sections below are kept as history only. Do not rebuild them.
+> - **M1:** calendar-aware schedule, evening check-out.
+> - **M2:** water, protein/carb and meal targets, weight, weather.
+> - **M3:** session logging, RPE load, monotony, freshness.
+> - **M4:** ankle tests (all of it).
+> - **M5:** football recovery profile (returns in M7.1 from heart rate), score-vs-session check, evening-tag habit effects. Habit effects now use strap-derived tags only.
+> - **M6:** experiments (all of it).
+
 ---
 
 ## 0. Ground rules (apply to every milestone)
@@ -26,7 +34,8 @@ Background reading: `FEATURE_RESEARCH.md` (the science), `PERSONALISATION.md` (w
 7. **No personal data in the repo.** Examples use invented values.
 8. **British English** in all copy. Times are 24-hour `HH:MM`.
 9. **Supabase:** a day's whole record lives in `days.data` (jsonb), so new day fields sync with no schema change. New *tables* need SQL in `supabase/schema.sql` plus a line in `docs/SUPABASE_SETUP.md`.
-10. **Engine size:** when `engine.js` passes ~900 lines, split it into `src/engine/{sync,baselines,score,directions,schedule,brief,load,learning}.js` and re-export from `src/engine.js`. Keep the import path stable for the UI and tests.
+10. **Data sources:** only what the Helio Strap measures (via Apple Health) plus the quick self-ratings already in the app. No blood tests, third-party app imports, AI chat or native app.
+11. **Engine size:** when `engine.js` passes ~900 lines, split it into `src/engine/{sync,baselines,score,directions,schedule,brief,load,learning}.js` and re-export from `src/engine.js`. Keep the import path stable for the UI and tests.
 
 ---
 
@@ -430,20 +439,73 @@ export function experimentResult(history, experiment)     // reuses tagEffects m
 
 ---
 
-## M7 — Later (separate PRs, specs to expand when started)
+## M7 — More from your Helio Strap (strap data only)
 
-- **Blood markers:**
-  - **Entry & storage:** a `labs` table (date, marker, value, unit, refLow, refHigh) and an entry form.
-  - **Card:** markers with a trend.
-  - **Rules:** vitamin D low → daily item Oct–Mar; ferritin low → food suggestions + "discuss with your GP". Never diagnose.
-- **Hevy import (optional, needs Hevy Pro API key):**
-  - **Where:** a Supabase Edge Function, so the key never sits in the repo.
-  - **What:** e1RM (Epley) per main lift, weekly sets per muscle group, top-set vs readiness band.
-- **Ask CHINH:**
-  - **Where:** a Supabase Edge Function calls the Claude API with the engine's computed summary (not raw history).
-  - **Behaviour:** answers questions but **never** changes numbers or rules.
-  - **Settings:** opt-in, with a page stating exactly what's sent. Memory is visible and editable (the WHOOP lesson).
-- **Native iPhone app (Expo + HealthKit):** background sync, a widget, an evening reminder. It reuses `engine.js` unchanged.
+**Scope rule from here on:** new data comes only from what the Amazfit Helio Strap measures, via Zepp → Apple Health → Shortcut.
+- **Removed from the plan:** blood tests, Hevy or other training-app imports, phone jump tests, an AI chat, a native iPhone app. CHINH stays a website (hosted on Vercel).
+- **Kept:** the quick check-in ratings (soreness, ankle/hip, energy, sleep quality, ill / high-stress). They are 30 % of the score and the only signal for muscle fatigue.
+
+**What the strap can give us through Apple Health:**
+
+| Signal | Readable by Shortcuts? | Status |
+|---|---|---|
+| Heart-rate samples (incl. during workouts) | Yes | **M7.1** |
+| HRV, resting HR, sleep, bed/wake times | Yes | already used |
+| Steps, active energy | Yes | **M7.2** |
+| Blood oxygen (spot and overnight) | Yes | **M7.3** |
+| Sleep stages | Only if Zepp writes them | **M7.4** (display only) |
+| Workout records | **No**: Shortcuts' Find Health Samples has no Workout type | use HR samples instead |
+| Stress, PAI, Zepp readiness, respiration rate, skin temperature | **No**: stay inside Zepp | out of scope |
+
+### Shortcut contract additions (all optional, all about **yesterday** unless noted)
+
+| Param | Example | Meaning |
+|---|---|---|
+| `z` | `12,30,25,10,2` | HR sample counts in zones 1–5 yesterday |
+| `hri` | `60` | seconds between HR samples during activity (default 60) |
+| `hrmax` | `188` | highest HR sample yesterday |
+| `st` | `9450` | steps yesterday |
+| `ae` | `640` | active energy yesterday, kcal |
+| `spo2` | `96` | overnight blood-oxygen average, % (since 18:00) |
+| `spo2min` | `92` | overnight minimum, % |
+| `deep`, `rem`, `core` | `62,95,240` | sleep-stage minutes, only if present |
+
+- **Where yesterday's values live:** stored on **yesterday's** day record (`hrZones`, `hrMax`, `steps`, `activeKcal`). Overnight values are stored on **today's** record (`spo2`, `spo2Min`, `stages`).
+- **First task, before any code:** check the strap's HR sample interval during a workout (Health → Heart → Heart Rate → Show All Data). If it isn't ~60 s, set `hri` so counts convert to minutes correctly.
+
+### M7.1 Heart-rate training load (automatic)
+
+```js
+export const HR = { zones: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0], maxWindowDays: 90 };
+export function personalMaxHr(history, profile)   // profile.maxHr if set, else the 98th percentile of hrMax over 90 days (needs ≥ 10 days), else null
+export function zoneMinutes(counts, hri = 60)    // counts → minutes per zone
+export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z × z (z = 1..5)
+```
+- **Load summary:** `hrLoadSummary` compares this week's `hrLoad` with the 4 weeks before. It's advisory only, and starts once the prior 4 weeks have ≥ 4 days with HR data. There's no manual RPE fallback.
+- **Auto-detected sessions:** if yesterday's `hrLoad` ≥ `HR.sessionMin` (default 60), store `session: { type: template[day], auto: true, minutes: Z2+ minutes }`. Nothing is entered by hand.
+- **Learning:** bring back the football recovery profile (hours until HRV and resting HR return after a match), using auto-detected football days.
+- **Tests:** zone conversion, TRIMP, load summary threshold, auto-session detection, max-HR percentile, football recovery from auto-detected days.
+
+### M7.2 Steps and active energy
+- **Vitals strip:** shows yesterday's steps and active energy, against your 30-day median.
+- **New tag:** `"big-day"` when active energy ≥ 1.5× your 30-day median. It feeds the habit-effects learning (what big days do to your next morning).
+- **Restoration days:** if yesterday's steps were < 5,000, add a "30-min easy walk" block. Gentle movement, not training.
+- **Tests:** median, the big-day tag, the walk block only on restoration days.
+
+### M7.3 Overnight blood oxygen
+- **Baseline:** 30-day mean of `spo2`, same exclusions as HRV (override and low-confidence days).
+- **Supporting signal only:** wrist SpO2 is noisy, so it never fires a direction on its own.
+- **When it counts:** if the average is ≥ 2 points below baseline on the same mornings the resting-HR rule fires, the `rhr-high` direction adds "and overnight oxygen is down N points", and the illness-confidence note says so.
+- **Data confidence:** `spo2Min` < 88 % on a single night is treated as a likely artefact (loose strap) and shown as a data-quality note, not a health claim.
+- **Tests:** baseline, supporting-only behaviour, the artefact note.
+
+### M7.4 Sleep stages (display only)
+- **When present:** if Sleep samples include Core/Deep/REM, the Shortcut sends minutes and CHINH shows a stacked bar on the recovery card.
+- **Not used in the score or directions:** consumer staging isn't accurate enough to act on. The stages are display only.
+
+### M7.5 Hosting on Vercel (done)
+- **Hosting:** the site deploys from `main` via Vercel's Git integration. `vercel.json` runs the tests before every build.
+- **CI:** GitHub Actions still tests and builds every PR. GitHub Pages is retired.
 
 ---
 
@@ -458,5 +520,6 @@ export function experimentResult(history, experiment)     // reuses tagEffects m
 | M4 | "Implement M4 from docs/TECH_SPEC.md: weekly ankle tests and chart." |
 | M5 | "Implement M5 from docs/TECH_SPEC.md: learning functions and the Insights card." |
 | M6 | "Implement M6 from docs/TECH_SPEC.md: personal experiments." |
+| M7 | "Implement M7.1 from docs/TECH_SPEC.md (HR load), then M7.2–M7.4, one PR each." |
 
-After each merge: run the morning Shortcut once to check the live site, and update `CLAUDE.md` if an architecture note changed.
+After each merge: run the morning Shortcut once to check the live site on Vercel, and update `CLAUDE.md` if an architecture note changed.

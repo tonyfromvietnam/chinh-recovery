@@ -23,12 +23,12 @@ iPhone (Shortcut) ──▶ CHINH ──▶ Supabase "days" table ◀── CHIN
 
 **Check it's working:** **Table Editor → days** shows one row per day once you've signed in on the phone.
 
-**Profile table (added with the morning brief):** the same script also creates `profile`: one row with your weight, wake times, weekly plan and active experiment. If you set up Supabase before this was added, run the script again. Until you do, days still sync and the profile stays on each device.
+**Profile table (added with the morning brief):** the same script also creates `profile`: one row with your wake times and weekly training plan. If you set up Supabase before this was added, run the script again. Until you do, days still sync and the profile stays on each device.
 
 ## 3. Allow sign-in links back to CHINH
 **Authentication → URL Configuration**
-- **Site URL:** `https://tonyfromvietnam.github.io/chinh-recovery/`
-- **Redirect URLs → Add URL:** `https://tonyfromvietnam.github.io/chinh-recovery/` (and `http://localhost:5173/chinh-recovery/` if you run it locally)
+- **Site URL:** `https://chinh-recovery.vercel.app/`
+- **Redirect URLs → Add URL:** `https://chinh-recovery.vercel.app/` (and `http://localhost:5173/` if you run it locally)
 
 Email sign-in is on by default, under **Authentication → Sign In / Providers → Email**.
 
@@ -36,10 +36,10 @@ Email sign-in is on by default, under **Authentication → Sign In / Providers �
 1. In Supabase, open **Project Settings → API** (called **API Keys** in some versions) and copy:
    - **Project URL**, e.g. `https://abcd1234.supabase.co`
    - The **anon / publishable** key. **Not** the `service_role` or secret key: that one bypasses security and must never leave Supabase.
-2. On GitHub, go to **chinh-recovery → Settings → Secrets and variables → Actions → Variables tab → New repository variable** and add:
-   - `SUPABASE_URL` = the Project URL
-   - `SUPABASE_ANON_KEY` = the anon / publishable key
-3. Redeploy: **Actions → Test and deploy → Run workflow**, or merge any change to `main`.
+2. On **Vercel**, open the **chinh-recovery** project → **Settings → Environment Variables** and add (for Production and Preview):
+   - `VITE_SUPABASE_URL` = the Project URL
+   - `VITE_SUPABASE_ANON_KEY` = the anon / publishable key
+3. Redeploy: **Deployments → ⋯ on the latest → Redeploy**, or merge any change to `main`.
 
 ## 5. Sign in and upload your history
 1. **On the iPhone first**, because it holds your history: open CHINH in **Safari** and tap **Sync across devices** in the header.
@@ -55,7 +55,7 @@ Each day carries the time it was last changed. If phone and desktop both changed
 ## Troubleshooting
 | You see | Fix |
 |---|---|
-| No "Sync across devices" button | The two variables aren't set, or the site hasn't been redeployed since (step 4). |
+| No "Sync across devices" button | The two variables aren't set in Vercel, or the site hasn't been redeployed since (step 4). |
 | The email link opens CHINH but you're not signed in | Add the CHINH address to **Redirect URLs** (step 3). |
 | "Email rate limit exceeded" | Supabase's built-in email allows a few emails an hour. Wait and try again. |
 | Desktop only updates when you click back into it | Realtime isn't on for `days`. Run `schema.sql` again (step 2). |
