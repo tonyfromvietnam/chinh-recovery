@@ -515,6 +515,65 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 - **Hosting:** the site deploys from `main` via Vercel's Git integration. `vercel.json` runs the tests before every build.
 - **CI:** GitHub Actions still tests and builds every PR. GitHub Pages is retired.
 
+### M7 follow-ups (from the strap research, 22 Oct 2026)
+- **M7.0 data check (on the phone, no code):** in Health → Browse, note whether Zepp writes Blood Oxygen, Respiratory Rate and sleep stages, and the HR sample interval during a workout. If Blood Oxygen is empty, M7.3 stays dormant. Reviews and Zepp's own pages disagree on SpO2, and HRV arrives as only 2–4 points a night (RMSSD stored in HealthKit's SDNN field).
+- **Session guards:** reviews say the strap's auto workout detection invents sessions. Tighten `autoSession` to need ≥ 20 min in zone 2+ as well as `HR.sessionMin`, and let a one-tap "not a session" set `session.dismissed = true` (excluded from load and learning).
+- **Routes not used:** the unofficial Zepp API (against Zepp's terms, token expires about every 30 days), Zepp's deprecated developer REST API, Strava's API (third-party, needs a subscription).
+
+---
+
+## M8 — Your trainer: calisthenics + bands, rules first, AI on top
+
+**Owner request, 22 Oct 2026:** training takes too long; switch to **full calisthenics plus resistance bands**, and have an AI act as a personal trainer that picks each day's exercises from his data. This brings back two things removed on 19 Oct, at the owner's request: a **session log** (needed for progression) and an **AI** (as a trainer, not a chat). Everything else on the removed list stays removed.
+
+**Evidence the design rests on** (sources in `docs/FEATURE_RESEARCH.md` §12):
+- **Short sessions work.** ≥ 4 hard sets per muscle group a week is the minimum worth doing; 6–15 RM, or 15–40 reps if taken to failure. Supersets roughly halve session time with the same strength and size gains (Iversen 2021; Zhang 2025 meta-analysis).
+- **Bodyweight and bands are enough for size.** All loads build muscle similarly when sets are hard (BJSM 2023 network meta-analysis, 178 studies); push-ups matched bench press at 40 % 1RM (Kikuchi 2017); progressive calisthenic push-ups matched bench press for strength (Kotarsky 2018); elastic bands matched machines and free weights for strength (Lopes 2019). Top-end maximal strength is the one thing heavy loads still do better.
+- **Football prehab:** programmes with the Nordic hamstring exercise roughly halve hamstring injuries (van Dyk 2019, RR 0.49), but only with ≥ 75 % adherence (2025 meta-analysis). Copenhagen adductor: ~30 reps a week builds adductor strength; groin-injury prevention is unproven.
+- **Ankle:** balance training cuts ankle sprains by about a third to a half, more in people with a previous sprain; ≥ 6 weeks after an acute sprain reduces re-sprains for up to a year.
+- **Effort:** reps in reserve (RIR) is judged better close to failure and on lower-rep sets, so the last set of each exercise goes to technical failure as a calibration.
+- **AI plans:** expert reviewers rate LLM-written training plans as moderate; quality rises with more input, and safety gaps appear with injuries (Düking 2024, Havers 2025, Akrimi 2025). So the AI gets rich, structured input, chooses only from a fixed library, and is checked by rules.
+
+**Ground rules for M8:**
+- The engine still decides **how hard** today is (score, archetype, directions, `trainingDecision`). The AI only chooses **what** to do within that. It never changes the score, the decision or the four mobility drills.
+- Every AI session passes a pure-function validator or CHINH falls back to the rule-based session.
+- The exercise library and ladders live in `docs/knowledge/calisthenics-and-bands.md` and `src/engine/exercises.js`; the AI can only use ids from it.
+
+### M8.1 New plan and rule-based sessions (no AI)
+- **Profile (settings) adds:** `equipment` (`bands` always; optional `bar`, `table`), `sessionMinutes` (20 / 30 / 45, default 30). Settings now hold wake times, the weekly plan, equipment and session length.
+- **Template options:** `full-a`, `full-b`, `football`, `zone2`, `rest`. `upper` / `lower` stay valid for old profiles and map to Full A / Full B.
+- **Suggested default week:** Mon Full A · Tue rest · Wed Football · Thu Full B · Fri rest · Sat Football · Sun Full A (optional; skip if short of time). About 1.5 h of strength a week instead of about 4 h, still ≥ 4 hard sets per muscle group. The 10-min mobility panel and the balance finisher run every day.
+- **`src/engine/exercises.js`:** `EXERCISES` (id, pattern, rung, reps, ankle 0–2, needs) and `buildSession({ dayType, archetypeId, decision, directives, profile, history })` returning `{ blocks: [{ pair: [ex, ex], rounds, restSec }], finisher, minutes, why }`.
+- **Rules inside `buildSession`:**
+  - High Output: all rounds, last set to failure. Balanced Flow: one round fewer, 2–3 RIR. Active Restoration, or `hrv-low` / `rhr-high` stop: no strength block, balance finisher and mobility only.
+  - `ankle-flare` (ankle/hip ≥ 4): no exercise with ankle load 2; balance stays at rungs 1–3.
+  - Lower-body soreness ≥ 4: lower patterns drop to rung − 1 and one round fewer.
+  - Day before football: no Nordic, lower patterns one round fewer. Nordic is due 2× a week, Copenhagen about 30 reps a week; if a week is short, the next session adds it.
+  - Rungs come from the session log (`currentRung(history, pattern)`); with no log, start at rung 2.
+- **Schedule:** the 17:00 training block takes the session's real minutes and title ("Full A · 30 min").
+- **Tests:** each rule above, session minutes ≤ `sessionMinutes`, the ladder start, Nordic spacing, the restoration swap.
+
+### M8.2 Session log (about 30 seconds)
+- **Training card:** shows today's session. After training, each exercise is pre-filled with the target reps; you tick it, change a number if it differs, and mark the last set *easy / right / failed*.
+- **Stored on today's record:** `workout = { dayType, exercises: [{ id, rung, reps: [12, 11, 9], last: "right" }], minutes, updatedAt }`. The automatic HR session (M7.1) supplies minutes and load, so nothing is asked twice.
+- **Progression:** `nextRung(history, pattern)` applies the rule at the end of the library doc: top of the range twice running moves up a rung; missing the bottom twice moves down.
+- **Tests:** progression up and down, bands as half a rung, logs merge by `updatedAt`.
+
+### M8.3 Training week view
+- **Plan vs done:** the week's template against logged sessions and auto-detected HR sessions, with dismissed sessions left out.
+- **Counts:** hard sets per muscle group (target ≥ 4), Nordic sessions (target 2), Copenhagen reps (target ~30), balance days, HR load against your 42-day weekly average.
+- **`weeklyReview`** adds `sessionsPlanned`, `sessionsDone`, `setsByPattern`, `prehab`.
+- **Tests:** plan/actual matching, the counts.
+
+### M8.4 AI trainer (Claude)
+- **Server function:** `api/coach.js` on Vercel. `ANTHROPIC_API_KEY` and `COACH_MODEL` are Vercel environment variables, never in the browser. Requests need a valid Supabase session (the function checks the JWT), so nobody else can spend the key. Limit: one plan a day plus 3 regenerations.
+- **Input** (`coachInput(...)`, pure, in the engine): today's archetype, decision, direction ids and their numbers, day type, `sessionMinutes`, equipment, current rung per pattern, the last 6 weeks of logged sessions (per pattern: rung, best reps, last-set effort), HR load 7/42, ankle/hip ratings for 14 days, football days, prehab counts this week, and the rules above as text. No name, email or raw history.
+- **Output:** strict JSON `{ blocks: [{ pair: [{ id, rung, sets, reps, rir }], rounds, restSec }], finisher, why }`; `why` is 1–2 sentences naming the numbers behind the choice.
+- **Validator** (`validateSession(session, constraints)`, pure): ids exist and fit the equipment; ankle and soreness rules; Nordic spacing; estimated minutes ≤ `sessionMinutes`; rungs within ± 1 of `nextRung`. On failure the card shows the rule-based session from M8.1 with "Standard session: the AI plan didn't pass the checks".
+- **Weekly note (Sundays):** the AI also gets the M8.3 week summary and may suggest one change for next week (a template swap or a rung change). It's shown as a suggestion you accept with one tap, never applied automatically.
+- **Cost and privacy:** one small request a day, paid per use on your Anthropic API account. Only the summary leaves the device.
+- **Tests:** `coachInput` contains no identifiers, validator cases (each rule), fallback, time estimate. The API call itself is mocked.
+
 ---
 
 ## PR order & prompts
@@ -528,6 +587,11 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 | M4 | "Implement M4 from docs/TECH_SPEC.md: weekly ankle tests and chart." |
 | M5 | "Implement M5 from docs/TECH_SPEC.md: learning functions and the Insights card." |
 | M6 | "Implement M6 from docs/TECH_SPEC.md: personal experiments." |
-| M7 | "Implement M7.1 from docs/TECH_SPEC.md (HR load), then M7.2–M7.4, one PR each." |
+| M7 | "Implement M7.1 from docs/TECH_SPEC.md (HR load), then M7.2–M7.4, one PR each." (done) |
+| M7 follow-ups | "Implement the M7 follow-ups from docs/TECH_SPEC.md: session guards and dismiss." (after the M7.0 phone check) |
+| M8.1 | "Implement M8.1 from docs/TECH_SPEC.md: exercise library, new template, rule-based sessions." |
+| M8.2 | "Implement M8.2 from docs/TECH_SPEC.md: session log and progression." |
+| M8.3 | "Implement M8.3 from docs/TECH_SPEC.md: training week view." |
+| M8.4 | "Implement M8.4 from docs/TECH_SPEC.md: the AI trainer function, validator and fallback." |
 
 After each merge: run the morning Shortcut once to check the live site on Vercel, and update `CLAUDE.md` if an architecture note changed.

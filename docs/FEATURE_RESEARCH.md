@@ -211,6 +211,39 @@ Pick a fact **tied to today's data**, with its source. Examples:
 
 ---
 
+## 11. Strap data: what the Helio Strap can reach (research 22 Oct 2026)
+
+**Measured by the strap:** per-second HR, resting HR, overnight HRV, SpO2, stress, skin temperature, sleep stages incl. REM and naps, breathing rate and breathing quality, steps, calories, PAI, BioCharge (needs 7 days), Exertion, VO2 max, training load / effect, recovery time, HR recovery, 50+ sport modes, strength reps/sets/rest with 25 auto-recognised lifts, HYROX mode, real-time Bluetooth HR, 21 days of offline HR storage.
+
+**What reaches Apple Health from Zepp:** steps, sleep (with stages), HR (all day and workouts), workouts, active energy, resting HR, sparse HRV (2–4 points a night; Zepp's value is RMSSD stored in HealthKit's SDNN field). Blood oxygen: sources disagree. Respiratory rate: unconfirmed. **Not exported:** stress, temperature, BioCharge / readiness, PAI, VO2 max, Zepp training load.
+
+**Other routes:** Zepp's GDPR export (official, manual). Unofficial reverse-engineered API (zepp-bridge, huami-token, ZeppBridge advanced login): fuller HRV, stress and temperature, but against the terms, token expires ~30 days. Zepp's old developer REST API is deprecated. Strava API: per-second HR streams per workout, single-player mode for personal apps, needs a subscription; a third-party import, so out of scope.
+
+**Reviews:** overnight HRV close to Whoop/Oura; HR zones use a fixed formula; auto workout detection invents sessions; REM unreliable, time awake often zero; sleep score generous. Zepp Coach models load with TRIMP, 42-day CTL and 7-day ATL.
+
+**What CHINH does with it:** TECH_SPEC M7 and the M7 follow-ups.
+
+Sources: [Zepp privacy support](https://www.zepp.com/privacy-support) · [zepp-bridge](https://github.com/kikienrico/zepp-bridge) · [ZeppBridge](https://github.com/lingcang728/ZeppBridge) · [Deprecated Zepp platform](https://github.com/zepp-health/rest-api/issues/26) · [Strava getting started](https://developers.strava.com/docs/getting-started/) · [Strava streams](https://strava.github.io/api/v3/streams/)
+
+## 12. Short calisthenics + band training, and AI as a trainer (research 22 Oct 2026)
+
+| Question | Finding | Source |
+|---|---|---|
+| How little is enough? | ≥ 4 hard sets per muscle group a week; 6–15 RM, or 15–40 reps to failure; one leg-press pattern, one pull, one push as the minimum. A single set 2–3× a week still builds strength in trained men. | Iversen 2021; Androulakis-Korakakis 2020 |
+| Do supersets save time? | Same reps, volume, strength and size gains with much shorter sessions; agonist–antagonist pairs keep the most volume. Higher effort felt and more fatigue. | Zhang 2025 meta-analysis (19 studies) |
+| Do light loads build muscle? | All prescriptions built muscle comparably; heavy loads (> 80 % 1RM) still win for maximal strength. | BJSM 2023 network meta-analysis (178 studies) |
+| Push-ups vs bench press | Push-ups at a load matched to 40 % 1RM bench gave the same muscle and strength gains over 8 weeks; progressive calisthenic push-ups matched bench for 1RM gains. | Kikuchi 2017; Kotarsky 2018 |
+| Bands vs weights | No difference in upper or lower-body strength gains. | Lopes 2019 meta-analysis |
+| Nordic hamstring | Programmes including it cut hamstring injuries by about half (RR 0.49); the effect depends on ≥ 75 % adherence. | van Dyk 2019; 2025 football meta-analysis |
+| Copenhagen adductor | Large adductor strength gains at ~30 reps a week; no proven drop in groin injuries. | Quintana-Cepedal 2025 |
+| Ankle balance training | Neuromuscular / balance training: RR 0.60 for ankle sprains, 0.69 in people with a previous sprain; ≥ 6 weeks after an acute sprain reduces re-sprains for a year. | Vriend 2016; Schiftan 2015; McKeon 2008 |
+| Reps in reserve | More accurate close to failure and on lower-rep sets; use a range and calibrate with sets to failure. | Russo 2025; Remmert 2023; Helms 2016 |
+| AI-written plans | Coaching experts rate LLM plans moderate; quality rises with more input; safety gaps show up with health conditions; GPT-4 was close to coaches on personalisation but can't correct form. | Düking 2024; Havers 2025; Akrimi 2025; Li 2025 |
+
+**What CHINH does with it:** TECH_SPEC M8 and `docs/knowledge/calisthenics-and-bands.md`.
+
+Sources: [Iversen 2021](https://link.springer.com/article/10.1007/s40279-021-01490-1) · [Androulakis-Korakakis 2020](https://pubmed.ncbi.nlm.nih.gov/31797219/) · [Supersets meta-analysis 2025](https://pmc.ncbi.nlm.nih.gov/articles/PMC12011898/) · [BJSM 2023 prescription NMA](https://bjsm.bmj.com/content/57/18/1211) · [Kikuchi 2017](https://pmc.ncbi.nlm.nih.gov/articles/PMC5812864/) · [Kotarsky 2018](https://journals.lww.com/nsca-jscr/fulltext/2018/03000/effect_of_progressive_calisthenic_push_up_training.9.aspx) · [Lopes 2019](https://pmc.ncbi.nlm.nih.gov/articles/PMC6383082/) · [van Dyk 2019](https://bjsm.bmj.com/content/53/21/1362) · [Hamstring prevention adherence 2025](https://pubmed.ncbi.nlm.nih.gov/41945463/) · [Copenhagen meta-analysis 2025](https://digibuo.uniovi.es/dspace/bitstream/handle/10651/82884/Scandinavian%20Med%20Sci%20Sports%20-%202025%20-%20Quintana%e2%80%90Cepedal%20-%20The%20Copenhagen%20Adduction%20Exercise%20Effect%20on%20Sport%20Performance%20and.pdf?isAllowed=y&sequence=1) · [Vriend 2016](https://doi.org/10.1136/jisakos-2016-000062) · [Schiftan 2015](https://www.jsams.org/article/S1440-2440(14)00074-7/fulltext) · [McKeon 2008](https://pmc.ncbi.nlm.nih.gov/articles/PMC2386424/) · [Remmert 2023 RIR](https://journals.sagepub.com/doi/10.1177/00315125231169868) · [Helms 2016](https://pmc.ncbi.nlm.nih.gov/articles/PMC4961270/) · [Düking 2024](https://pmc.ncbi.nlm.nih.gov/articles/PMC10915606/) · [Havers 2025](https://pmc.ncbi.nlm.nih.gov/articles/PMC12492345/) · [Akrimi 2025](https://pmc.ncbi.nlm.nih.gov/articles/PMC12031090/) · [Li 2025](https://link.springer.com/article/10.1186/s12889-025-22739-8)
+
 ## Roadmap
 
 | Version | Adds | Needs |

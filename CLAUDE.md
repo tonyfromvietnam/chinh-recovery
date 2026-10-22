@@ -21,8 +21,9 @@ Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
 
 ## Scope
 
-- Data sources: only what the Amazfit Helio Strap measures (via Zepp → Apple Health → Shortcut) plus the quick check-in ratings (soreness, ankle/hip, energy, sleep quality, ill / high-stress). Settings hold only wake times and the weekly plan.
+- Data sources: only what the Amazfit Helio Strap measures (via Zepp → Apple Health → Shortcut) plus the quick check-in ratings (soreness, ankle/hip, energy, sleep quality, ill / high-stress). Settings hold wake times, the weekly plan, equipment and session length (M8).
 - Removed on 19 Oct 2026 and not to be re-added without the owner asking: evening check-out, session logging, ankle tests, experiments, weight/water/food targets, calendar and weather, blood tests, third-party app imports, AI chat, native app. CHINH is a website.
+- Brought back on 22 Oct 2026 at the owner's request (M8): a quick session log and an AI trainer that picks exercises. The AI never changes the score, the training decision or the mobility list, and every AI session must pass `validateSession` or fall back to the rule-based session. Training is calisthenics + resistance bands: `docs/knowledge/calisthenics-and-bands.md`.
 
 ## Rules the engine must keep
 
@@ -38,10 +39,11 @@ Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
 ## Reference
 
 - Mobility drills and dosing: @docs/knowledge/mobility-and-movement.md
+- Calisthenics and band exercises, ladders and progression: @docs/knowledge/calisthenics-and-bands.md
 - Original scoring and schedule spec: @docs/knowledge/recovery-algorithm.md
 - Feature research and roadmap (read before building new features): `docs/FEATURE_RESEARCH.md`
 - Personalisation plan (population defaults → values learned from the owner's data): `docs/PERSONALISATION.md`
-- **Build plan: `docs/TECH_SPEC.md`** — milestones M0–M7, one PR each, in order. Follow its ground rules.
+- **Build plan: `docs/TECH_SPEC.md`** — milestones M0–M8, one PR each, in order. Follow its ground rules.
 - What similar products do and what to copy or avoid: `docs/SIMILAR_PRODUCTS.md`
 - Personal training context lives in `CLAUDE.local.md` (git-ignored, on the owner's machine only).
 
