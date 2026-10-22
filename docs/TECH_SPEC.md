@@ -562,6 +562,9 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 - **Tests:** each rule above, `estimateMinutes` ≤ `sessionMinutes` for 20 / 30 / 45, the ladder start, Nordic in both sessions and never the day before football, the restoration swap, balance and calf in the mobility panel, the `power-l` ankle gate (including the balance-rung condition), every power dose in the library ≤ 5 reps or ≤ 15 s, entry rungs progressing within their range, rung-up at ≥ 12 reps from the first harder rung, failure sets only on High Output days.
 
 ### M8.2 Session log (about 30 seconds)
+
+**Status:** built (`nextRung`, `applyWorkoutLog`, `markExtraDone`, `daySession` in `src/engine/exercises.js`; log form in `TrainingCard`; `tests/progression.test.js`). Ticking the balance or calf drill in the mobility panel logs it (`extrasDone`), which is what opens the `power-l` gate at balance rung 4. Power moves up a whole rung, only after feeling easy twice. Today's plan ignores today's own log.
+
 - **Training card:** shows today's session. After training, each exercise is pre-filled with the target reps; you tick it, change a number if it differs, and mark the last set *easy / right / failed*.
 - **Stored on today's record:** `workout = { dayType, exercises: [{ id, rung, reps: [12, 11, 9], last: "right" }], minutes, updatedAt }`. The automatic HR session (M7.1) supplies minutes and load, so nothing is asked twice.
 - **Which session wins:** a logged `workout` sets the day's session type; the automatic HR session only supplies minutes and load (and is never dismissed by a log). With no log, the HR session's type comes from the template as in M7.1. With a log but no HR data, minutes come from the log and load stays unknown (never estimated).

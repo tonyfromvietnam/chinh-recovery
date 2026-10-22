@@ -10,7 +10,7 @@ import {
 import {
   planDay, parseSyncHash, parseBackfillHash, mergeBackfill, upsertDay, dateKey, weeklyReview,
   getArchetype, MOBILITY_DAY_MIN_DRILLS, mergeHistories, changedDays, latestRatings,
-  learnProfile, applyYesterday,
+  learnProfile, applyYesterday, applyWorkoutLog, markExtraDone, exerciseById,
 } from "./engine.js";
 import { supabase, pullDays, pushDays, pullProfile, pushProfile } from "./supabase.js";
 import { Card, Eyebrow, MiniRing, Checkbox, Chips } from "./components/ui.jsx";
@@ -833,6 +833,9 @@ export default function CHINHDashboard() {
   const toggle = (id) => {
     const next = { ...done, [id]: !done[id] };
     setDone(next);
+    // Balance and calf ticks count towards their ladders (M8.2)
+    const extra = /^(balance|calf)-/.test(id) ? exerciseById(id) : null;
+    if (extra) setHistory((h) => markExtraDone(h, today, extra, !!next[id]));
     if (!history.some((h) => h.date === today && Number.isFinite(h.score))) return;
     setHistory((h) => upsertDay(h, {
       date: today, blocksDone: schedule.filter((i) => next[i.id]).length, blocksTotal: schedule.length,
@@ -1041,7 +1044,8 @@ export default function CHINHDashboard() {
 
         {day.session && (
           <div className="mt-4">
-            <TrainingCard session={day.session} onOpenSettings={() => setSettingsOpen(true)} />
+            <TrainingCard session={day.session} logged={todayDay?.workout ?? null} onOpenSettings={() => setSettingsOpen(true)}
+              onSaveLog={(w) => setHistory((h) => applyWorkoutLog(h, today, w))} />
           </div>
         )}
 
