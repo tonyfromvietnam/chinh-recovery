@@ -524,7 +524,7 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 
 ## M8 — Your trainer: calisthenics + bands, rules first, AI on top
 
-**Owner request, 22 Oct 2026:** training takes too long; switch to **full calisthenics with a pull-up bar, dip bars and resistance bands**, and have an AI act as a personal trainer that picks each day's exercises from his data. This brings back two things removed on 19 Oct, at the owner's request: a **session log** (needed for progression) and an **AI** (as a trainer, not a chat). Everything else on the removed list stays removed.
+**Owner request, 22 Oct 2026:** training takes too long; the goal is to be strong for his size, springy and mobile (move easily for football and like a fighter) and look athletic, **without** chasing size; switch to **full calisthenics with a pull-up bar, dip bars and resistance bands**, and have an AI act as a personal trainer that picks each day's exercises from his data. This brings back two things removed on 19 Oct, at the owner's request: a **session log** (needed for progression) and an **AI** (as a trainer, not a chat). Everything else on the removed list stays removed.
 
 **Evidence the design rests on** (sources in `docs/FEATURE_RESEARCH.md` §12):
 - **Short sessions work.** ≥ 4 hard sets per muscle group a week is the minimum worth doing; 6–15 RM, or 15–40 reps if taken to failure. Supersets roughly halve session time with the same strength and size gains (Iversen 2021; Zhang 2025 meta-analysis).
@@ -548,10 +548,13 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
   - High Output: all rounds, last set to failure. Balanced Flow: one round fewer, 2–3 RIR. Active Restoration, or `hrv-low` / `rhr-high` stop: no strength block, balance finisher and mobility only.
   - `ankle-flare` (ankle/hip ≥ 4): no exercise with ankle load 2; balance stays at rungs 1–3.
   - Lower-body soreness ≥ 4: lower patterns drop to rung − 1 and one round fewer.
+  - **Power primer** (first 3 min after the warm-up): High Output gets `power-l` and `power-u`, Balanced Flow one of them, Active Restoration none. `power-l` above rung 0 only when ankle/hip < 3, lower-body soreness < 4, no `ankle-flare`, and the balance ladder has reached rung 4 in the log; otherwise rung 0 or `power-u`. Power sets are never to failure and aren't counted as hard sets.
+  - **Strength bias:** main patterns target 5–10 reps; a rung that allows ≥ 12 clean reps triggers a rung up. Last set to failure only on High Output days.
+  - **Range:** each superset pair gets one `range` drill in its rest; the drill set follows the same ankle rule (ankle 1 drills are skipped on `ankle-flare`).
   - Day before football: no Nordic, lower patterns one round fewer. Nordic is due 2× a week, Copenhagen about 30 reps a week; if a week is short, the next session adds it.
   - Rungs come from the session log (`currentRung(history, pattern)`); with no log, start at rung 2.
 - **Schedule:** the 17:00 training block takes the session's real minutes and title ("Full A · 30 min").
-- **Tests:** each rule above, session minutes ≤ `sessionMinutes`, the ladder start, Nordic spacing, the restoration swap.
+- **Tests:** each rule above, session minutes ≤ `sessionMinutes`, the ladder start, Nordic spacing, the restoration swap, the `power-l` ankle gate (including the balance-rung condition), rung-up at ≥ 12 reps, failure sets only on High Output days.
 
 ### M8.2 Session log (about 30 seconds)
 - **Training card:** shows today's session. After training, each exercise is pre-filled with the target reps; you tick it, change a number if it differs, and mark the last set *easy / right / failed*.
@@ -569,7 +572,7 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 - **Server function:** `api/coach.js` on Vercel. `ANTHROPIC_API_KEY` and `COACH_MODEL` are Vercel environment variables, never in the browser. Requests need a valid Supabase session (the function checks the JWT), so nobody else can spend the key. Limit: one plan a day plus 3 regenerations.
 - **Input** (`coachInput(...)`, pure, in the engine): today's archetype, decision, direction ids and their numbers, day type, `sessionMinutes`, equipment, current rung per pattern, the last 6 weeks of logged sessions (per pattern: rung, best reps, last-set effort), HR load 7/42, ankle/hip ratings for 14 days, football days, prehab counts this week, and the rules above as text. No name, email or raw history.
 - **Output:** strict JSON `{ blocks: [{ pair: [{ id, rung, sets, reps, rir }], rounds, restSec }], finisher, why }`; `why` is 1–2 sentences naming the numbers behind the choice.
-- **Validator** (`validateSession(session, constraints)`, pure): ids exist and fit `equipment`; ankle and soreness rules; Nordic spacing; estimated minutes ≤ `sessionMinutes`; rungs within ± 1 of `nextRung`. On failure the card shows the rule-based session from M8.1 with "Standard session: the AI plan didn't pass the checks".
+- **Validator** (`validateSession(session, constraints)`, pure): ids exist and fit `equipment`; ankle and soreness rules, including the `power-l` gate; power never above 5 reps a set; Nordic spacing; estimated minutes ≤ `sessionMinutes`; rungs within ± 1 of `nextRung`. On failure the card shows the rule-based session from M8.1 with "Standard session: the AI plan didn't pass the checks".
 - **Weekly note (Sundays):** the AI also gets the M8.3 week summary and may suggest one change for next week (a template swap or a rung change). It's shown as a suggestion you accept with one tap, never applied automatically.
 - **Cost and privacy:** one small request a day, paid per use on your Anthropic API account. Only the summary leaves the device.
 - **Tests:** `coachInput` contains no identifiers, validator cases (each rule), fallback, time estimate. The API call itself is mocked.
