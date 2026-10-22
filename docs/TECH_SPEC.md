@@ -524,7 +524,7 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 
 ## M8 — Your trainer: calisthenics + bands, rules first, AI on top
 
-**Owner request, 22 Oct 2026:** training takes too long; switch to **full calisthenics plus resistance bands**, and have an AI act as a personal trainer that picks each day's exercises from his data. This brings back two things removed on 19 Oct, at the owner's request: a **session log** (needed for progression) and an **AI** (as a trainer, not a chat). Everything else on the removed list stays removed.
+**Owner request, 22 Oct 2026:** training takes too long; switch to **full calisthenics with a pull-up bar, dip bars and resistance bands**, and have an AI act as a personal trainer that picks each day's exercises from his data. This brings back two things removed on 19 Oct, at the owner's request: a **session log** (needed for progression) and an **AI** (as a trainer, not a chat). Everything else on the removed list stays removed.
 
 **Evidence the design rests on** (sources in `docs/FEATURE_RESEARCH.md` §12):
 - **Short sessions work.** ≥ 4 hard sets per muscle group a week is the minimum worth doing; 6–15 RM, or 15–40 reps if taken to failure. Supersets roughly halve session time with the same strength and size gains (Iversen 2021; Zhang 2025 meta-analysis).
@@ -540,7 +540,7 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 - The exercise library and ladders live in `docs/knowledge/calisthenics-and-bands.md` and `src/engine/exercises.js`; the AI can only use ids from it.
 
 ### M8.1 New plan and rule-based sessions (no AI)
-- **Profile (settings) adds:** `equipment` (`bands` always; optional `bar`, `table`), `sessionMinutes` (20 / 30 / 45, default 30). Settings now hold wake times, the weekly plan, equipment and session length.
+- **Profile (settings) adds:** `equipment` (default `["bands", "bar", "dip"]`, the owner's kit; each can be switched off, e.g. when travelling), `sessionMinutes` (20 / 30 / 45, default 30). Exercises whose `needs` aren't in `equipment` are skipped and the ladder falls back to the nearest rung without them. Settings now hold wake times, the weekly plan, equipment and session length.
 - **Template options:** `full-a`, `full-b`, `football`, `zone2`, `rest`. `upper` / `lower` stay valid for old profiles and map to Full A / Full B.
 - **Suggested default week:** Mon Full A · Tue rest · Wed Football · Thu Full B · Fri rest · Sat Football · Sun Full A (optional; skip if short of time). About 1.5 h of strength a week instead of about 4 h, still ≥ 4 hard sets per muscle group. The 10-min mobility panel and the balance finisher run every day.
 - **`src/engine/exercises.js`:** `EXERCISES` (id, pattern, rung, reps, ankle 0–2, needs) and `buildSession({ dayType, archetypeId, decision, directives, profile, history })` returning `{ blocks: [{ pair: [ex, ex], rounds, restSec }], finisher, minutes, why }`.
@@ -569,7 +569,7 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 - **Server function:** `api/coach.js` on Vercel. `ANTHROPIC_API_KEY` and `COACH_MODEL` are Vercel environment variables, never in the browser. Requests need a valid Supabase session (the function checks the JWT), so nobody else can spend the key. Limit: one plan a day plus 3 regenerations.
 - **Input** (`coachInput(...)`, pure, in the engine): today's archetype, decision, direction ids and their numbers, day type, `sessionMinutes`, equipment, current rung per pattern, the last 6 weeks of logged sessions (per pattern: rung, best reps, last-set effort), HR load 7/42, ankle/hip ratings for 14 days, football days, prehab counts this week, and the rules above as text. No name, email or raw history.
 - **Output:** strict JSON `{ blocks: [{ pair: [{ id, rung, sets, reps, rir }], rounds, restSec }], finisher, why }`; `why` is 1–2 sentences naming the numbers behind the choice.
-- **Validator** (`validateSession(session, constraints)`, pure): ids exist and fit the equipment; ankle and soreness rules; Nordic spacing; estimated minutes ≤ `sessionMinutes`; rungs within ± 1 of `nextRung`. On failure the card shows the rule-based session from M8.1 with "Standard session: the AI plan didn't pass the checks".
+- **Validator** (`validateSession(session, constraints)`, pure): ids exist and fit `equipment`; ankle and soreness rules; Nordic spacing; estimated minutes ≤ `sessionMinutes`; rungs within ± 1 of `nextRung`. On failure the card shows the rule-based session from M8.1 with "Standard session: the AI plan didn't pass the checks".
 - **Weekly note (Sundays):** the AI also gets the M8.3 week summary and may suggest one change for next week (a template swap or a rung change). It's shown as a suggestion you accept with one tap, never applied automatically.
 - **Cost and privacy:** one small request a day, paid per use on your Anthropic API account. Only the summary leaves the device.
 - **Tests:** `coachInput` contains no identifiers, validator cases (each rule), fallback, time estimate. The API call itself is mocked.

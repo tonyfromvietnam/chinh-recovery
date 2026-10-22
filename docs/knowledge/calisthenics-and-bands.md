@@ -1,6 +1,6 @@
-# Calisthenics & Resistance Band Library
+# Calisthenics, Bars & Bands Library
 
-Owner's kit (22 Oct 2026): bodyweight and resistance bands. A pull-up bar or a sturdy table for rows is optional; exercises that need one are marked.
+Owner's kit (22 Oct 2026): bodyweight, resistance bands, a **pull-up bar** and **dip bars**. Exercises that need a bar are marked in the `Needs` column. A backpack with books works as extra load once a bar exercise gets easy.
 
 Each movement pattern is a **ladder**: easiest first. You move up a rung when the progression rule says so (see the end of this file). `Ankle` is how much the exercise loads the injured ankle: **0** none, **1** low (standing, stable), **2** high (deep single-leg dorsiflexion, landing, hopping).
 
@@ -54,25 +54,37 @@ Each movement pattern is a **ladder**: easiest first. You move up a rung when th
 | 2 | Feet-elevated pike push-up | 6–12 |
 | 3 | Banded overhead press, half-kneeling | 8–15 |
 
+### Dips (`dip`)
+| Rung | Exercise | Reps | Needs |
+|---|---|---|---|
+| 1 | Support hold, shoulders down | 20–40 s | dip bars |
+| 2 | Band-assisted dip (band across the bars, knees on it) | 6–12 | dip bars |
+| 3 | Dip negatives, 4 s down | 4–8 | dip bars |
+| 4 | Dip, full range (shoulders just below elbows) | 5–15 | dip bars |
+| 5 | Dip, 2 s pause at the bottom | 5–12 | dip bars |
+| 6 | Weighted dip (backpack) | 5–10 | dip bars |
+
 ### Horizontal pull (`pull-h`)
 | Rung | Exercise | Reps | Needs |
 |---|---|---|---|
 | 1 | Banded seated row | 12–20 | band anchor |
-| 2 | Banded row, heavier band, 2 s squeeze | 10–15 | band anchor |
-| 3 | Inverted row under a sturdy table | 8–15 | table |
-| 4 | Feet-elevated inverted row | 8–12 | table |
+| 2 | Inverted row on the dip bars, knees bent | 10–15 | dip bars |
+| 3 | Inverted row on the dip bars, legs straight | 8–15 | dip bars |
+| 4 | Feet-elevated inverted row | 8–12 | dip bars |
+| 5 | Archer inverted row | 5–10 / side | dip bars |
 
 ### Vertical pull (`pull-v`)
 | Rung | Exercise | Reps | Needs |
 |---|---|---|---|
-| 1 | Banded lat pulldown (band anchored high) | 12–20 | band anchor |
-| 2 | Banded straight-arm pulldown + pulldown superset | 12 + 12 | band anchor |
-| 3 | Band-assisted pull-up | 5–10 | bar |
-| 4 | Pull-up negatives, 4 s down | 4–8 | bar |
+| 1 | Scapular pull-up (dead hang, shoulders down and back) | 8–12 | bar |
+| 2 | Band-assisted pull-up | 5–10 | bar |
+| 3 | Pull-up negatives, 4 s down | 4–8 | bar |
+| 4 | Chin-up (palms facing you) | 3–10 | bar |
 | 5 | Pull-up | 3–10 | bar |
+| 6 | Weighted pull-up (backpack) | 3–8 | bar |
 
 ### Arms (`arms`, optional filler)
-Banded curl, banded triceps pushdown, 12–20 reps. Only when the session has time left.
+Banded curl, banded triceps pushdown, 12–20 reps; or bench dips on the dip bars. Only when the session has time left.
 
 ## Core (`core`)
 | Rung | Exercise | Dose |
@@ -82,6 +94,9 @@ Banded curl, banded triceps pushdown, 12–20 reps. Only when the session has ti
 | 3 | Banded Pallof press (anti-rotation) | 10–15 / side |
 | 4 | Banded Pallof press, split stance | 10–15 / side |
 | 5 | Side plank with top-leg raise | 20–40 s / side |
+| 6 | Hanging knee raise (bar) | 8–15 |
+| 7 | Tuck L-sit on the dip bars | 10–30 s |
+| 8 | Hanging leg raise (bar) | 6–12 |
 
 ## Football prehab (always programmed)
 
@@ -112,8 +127,9 @@ Banded curl, banded triceps pushdown, 12–20 reps. Only when the session has ti
 
 1. **Warm-up, 4 min:** Knee-to-Wall Pulses and World's Greatest Stretch, 5 each side. The full mobility list stays in the mobility panel.
 2. **Three supersets, 22 min:** pairs of opposite patterns (push with pull, squat with hinge), 3 rounds, 60–90 s rest after each pair.
-   - Full A: `squat` + `pull-v` · `push-h` + `hinge` · `nordic` + `core`
-   - Full B: `hinge` + `push-v` · `pull-h` + `squat` · `copenhagen` + `calf`
+   - Full A: `squat` + `pull-v` · `dip` + `hinge` · `nordic` + `core`
+   - Full B: `push-h` + `pull-h` · `squat` + `push-v` · `copenhagen` + `calf`
+   - Across the week that's 2 pulling and 3 pushing patterns, with squats twice and hinges plus Nordics for the hamstrings.
 3. **Finisher, 4 min:** `balance`.
 
 For 20 minutes: 2 rounds of each superset. For 45: 4 rounds, or add `arms`.
@@ -123,5 +139,5 @@ For 20 minutes: 2 rounds of each superset. For 45: 4 rounds, or add `arms`.
 - **Effort target:** stop each set with **2 reps in reserve (RIR)**. The **last set** of each exercise goes to **technical failure** (the rep where form breaks), because people judge RIR badly on high-rep sets and the last set tells you the truth.
 - **Move up a rung:** when every set reaches the top of the rep range at the target effort in **two sessions running**. Start the new rung at the bottom of its range.
 - **Step down a rung:** when you miss the bottom of the range twice running.
-- **Bands:** going to a heavier band counts as half a rung: same exercise, reset to the bottom of the range.
+- **Bands and backpacks:** a heavier band, or more weight in the backpack, counts as half a rung: same exercise, reset to the bottom of the range.
 - **Readiness changes the dose, not the rung:** High Output days do all rounds with the last set to failure. Balanced Flow days drop a round and keep every set at 2–3 RIR. Active Restoration days have no strength work, only the balance finisher and the mobility panel.

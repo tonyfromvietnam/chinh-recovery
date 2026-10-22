@@ -23,7 +23,7 @@ Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
 
 - Data sources: only what the Amazfit Helio Strap measures (via Zepp → Apple Health → Shortcut) plus the quick check-in ratings (soreness, ankle/hip, energy, sleep quality, ill / high-stress). Settings hold wake times, the weekly plan, equipment and session length (M8).
 - Removed on 19 Oct 2026 and not to be re-added without the owner asking: evening check-out, session logging, ankle tests, experiments, weight/water/food targets, calendar and weather, blood tests, third-party app imports, AI chat, native app. CHINH is a website.
-- Brought back on 22 Oct 2026 at the owner's request (M8): a quick session log and an AI trainer that picks exercises. The AI never changes the score, the training decision or the mobility list, and every AI session must pass `validateSession` or fall back to the rule-based session. Training is calisthenics + resistance bands: `docs/knowledge/calisthenics-and-bands.md`.
+- Brought back on 22 Oct 2026 at the owner's request (M8): a quick session log and an AI trainer that picks exercises. The AI never changes the score, the training decision or the mobility list, and every AI session must pass `validateSession` or fall back to the rule-based session. Training is calisthenics with a pull-up bar, dip bars and resistance bands: `docs/knowledge/calisthenics-and-bands.md`.
 
 ## Rules the engine must keep
 
