@@ -102,27 +102,27 @@ Banded curl, banded triceps pushdown, 12–20 reps; or bench dips on the dip bar
 
 ## Power and springiness (`power-l`, `power-u`)
 
-Short, fast, never to failure: 3–5 reps per set, full rest, stop the moment the reps slow down or landings get loud. This is the "elastic" work: jump training stiffens tendons (springier, more efficient movement), and punch and kick force comes mostly from the legs and hip rotation.
+Short, fast, never to failure: **at most 5 reps per set** (pogo hops are timed instead: at most 15 s a set, since they're quick bouncing contacts rather than counted reps), full rest, stop the moment the reps slow down or landings get loud. This is the "elastic" work: jump training stiffens tendons (springier, more efficient movement), and punch and kick force comes mostly from the legs and hip rotation.
 
 ### Lower-body power (`power-l`), only when the ankle allows (see the rules)
 | Rung | Exercise | Dose | Ankle |
 |---|---|---|---|
-| 0 | Explosive glute bridge (fast up, 2 s down), the fallback while the ankle isn't ready | 3 × 6 | 0 |
+| 0 | Explosive glute bridge (fast up, 2 s down), the fallback while the ankle isn't ready | 3 × 5 | 0 |
 | 1 | Low pogo hops, double-leg, soft and quiet | 2 × 15 s | 2 |
 | 2 | Squat jump, stick the landing | 3 × 4 | 2 |
 | 3 | Broad jump, stick the landing | 3 × 3 | 2 |
 | 4 | Lateral bound, stick each side | 3 × 3 / side | 2 |
-| 5 | Continuous lateral bounds | 3 × 6 / side | 2 |
-| 6 | Single-leg pogo hops | 2 × 10 / side | 2 |
+| 5 | Continuous lateral bounds | 3 × 5 / side | 2 |
+| 6 | Single-leg pogo hops | 2 × 10 s / side | 2 |
 
 ### Upper-body and rotational power (`power-u`)
 | Rung | Exercise | Dose | Needs |
 |---|---|---|---|
-| 1 | Band rotational chop, high to low, driven from the hips | 3 × 6 / side | band anchor |
+| 1 | Band rotational chop, high to low, driven from the hips | 3 × 5 / side | band anchor |
 | 2 | Explosive push-up (hands leave the floor) | 3 × 4 | |
 | 3 | Explosive pull-up (chest towards the bar) | 3 × 3 | bar |
 | 4 | Clap push-up | 3 × 4 | |
-| 5 | Fast band punches (band anchored behind), driven by the back foot and hip turn, fast out, slow back | 3 × 8 / side | band anchor |
+| 5 | Fast band punches (band anchored behind), driven by the back foot and hip turn, fast out, slow back | 3 × 5 / side | band anchor |
 
 Punch and kick force comes mostly from the legs and trunk, not upper-body strength, so the hip-driven chop comes first and band punches sit at the top as a skill rung, not the main power driver.
 
