@@ -109,6 +109,8 @@ export function applyYesterday(history, today, yesterday, profile = null, now = 
   const entry = { date, ...yesterday, updatedAt: now };
   if (Array.isArray(yesterday.hrZones) && (!prev?.session || prev.session.auto)) {
     entry.session = autoSession(date, yesterday.hrZones, profile);
+    // A logged workout (M8.2) sets the type; heart rate keeps the minutes and load
+    if (entry.session && prev?.workout?.dayType) entry.session.type = dayTypeOf(prev.workout.dayType);
   }
   return upsertDay(history, entry);
 }
@@ -616,7 +618,7 @@ export function planDay({ checkin, history, today, profile = null }) {
 
   return {
     baselines, result, archetype, directives, schedule,
-    drills: [...buildMobility(checkin, archetype.id), ...mobilityExtras({ history, flare: directives.some((d) => d.id === "ankle-flare"),
+    drills: [...buildMobility(checkin, archetype.id), ...mobilityExtras({ history: history.filter((h) => h.date < today), flare: directives.some((d) => d.id === "ankle-flare"),
       strengthDay: !!session && !session.recovery, equipment: profile?.equipment }).map((ex) => ({
       id: ex.id, name: ex.name, area: ex.pattern === "calf" ? "ankle" : "balance", dose: formatDose(ex), required: false,
       cue: ex.pattern === "calf" ? "Full range, slow down. Strength days only." : "Ankle rehab: most days for at least 6 weeks after the sprain.",

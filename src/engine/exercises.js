@@ -146,14 +146,91 @@ export function targetReps(ex) {
   return [Math.max(ex.reps[0], lo), Math.min(ex.reps[1], hi)];
 }
 
-/* Highest rung logged for a pattern (M8.2 writes `workout` logs); until then the start rung */
-export function currentRung(history, pattern) {
-  let best = null;
-  for (const d of history) for (const e of d.workout?.exercises || []) {
-    const ex = exerciseById(e.id);
-    if (ex?.pattern === pattern && isNum(e.rung ?? ex.rung)) best = Math.max(best ?? -1, e.rung ?? ex.rung);
+/* ---------- M8.2 Session log and progression ----------
+   A day's log: `workout = { dayType, exercises: [{ id, rung, extra, reps: [10, 9, 8], last }], minutes, updatedAt }`.
+   Ticking the balance or calf drill in the mobility panel stores `extrasDone = { balance: { id, rung }, calf: … }`,
+   which counts as a set at the top of its range. */
+
+/* Every logged attempt at a pattern, oldest first */
+export function logEntries(history, pattern) {
+  const out = [];
+  for (const d of [...history].sort((a, b) => a.date.localeCompare(b.date))) {
+    for (const e of d.workout?.exercises || []) {
+      const ex = exerciseById(e.id);
+      if (ex?.pattern === pattern) out.push({ date: d.date, id: e.id, rung: e.rung ?? ex.rung, extra: e.extra ?? 0, reps: e.reps || [], last: e.last ?? null });
+    }
+    const done = d.extrasDone?.[pattern];
+    const dex = done && exerciseById(done.id);
+    if (dex) out.push({ date: d.date, id: dex.id, rung: dex.rung, extra: 0, reps: [dex.reps[1]], last: "right" });
   }
-  return best;
+  return out;
+}
+
+/* Highest rung logged for a pattern, or null (used for gates such as balance rung 4) */
+export function currentRung(history, pattern) {
+  const rungs = logEntries(history, pattern).map((e) => e.rung).filter(isNum);
+  return rungs.length ? Math.max(...rungs) : null;
+}
+
+/* A heavier band or more backpack weight counts as half a rung */
+export const isLoadable = (ex) => !!ex && (ex.needs.includes("bands") || /backpack/i.test(ex.name));
+
+/* Double progression (calisthenics-and-bands.md):
+   - top of the target range on every set, two sessions running → up (loadable rungs go up half a rung first: heavier band / more weight)
+   - from the first harder rung of a main pattern, any set of 12+ clean reps → up straight away
+   - missing the bottom of the range twice running → down
+   - power moves up only when it felt easy twice running (it's never taken near failure), and always a whole rung: more load would slow it */
+export function nextRung(history, pattern) {
+  const entries = logEntries(history, pattern);
+  if (!entries.length) return null;
+  const last = entries[entries.length - 1];
+  const ex = exerciseById(last.id);
+  const steps = ladder(pattern);
+  const [lo, hi] = ex.unit === "reps" ? targetReps(ex) : ex.reps;
+  const same = entries.slice(-2).filter((e) => e.rung === last.rung && e.extra === last.extra);
+  const power = pattern.startsWith("power");
+  const hitTop = (e) => e.reps.length > 0 && e.reps.every((r) => r >= hi) && (!power || e.last === "easy");
+  const missed = (e) => e.reps.some((r) => r < lo);
+  const bigSet = TRAINING.mainPatterns.includes(pattern) && ex.unit === "reps" && !isEntryRung(ex) && last.reps.some((r) => r >= TRAINING.entryRepsFrom);
+  const hold = { rung: last.rung, extra: last.extra, change: "same" };
+
+  if (bigSet || (same.length === 2 && same.every(hitTop))) {
+    const why = bigSet ? `${Math.max(...last.reps)} clean reps: time for a harder rung` : "top of the range two sessions running";
+    const higher = steps.find((s) => s.rung > last.rung);
+    if (isLoadable(ex) && !power && last.extra < 1 && !bigSet) return { rung: last.rung, extra: last.extra + 1, change: "half", why: `${why}: heavier band or more weight, same exercise` };
+    return higher ? { rung: higher.rung, extra: 0, change: "up", why } : { rung: last.rung, extra: last.extra + 1, change: "half", why: `${why}: top rung, add load` };
+  }
+  if (same.length === 2 && same.every(missed)) {
+    if (last.extra > 0) return { rung: last.rung, extra: last.extra - 1, change: "down", why: "missed the bottom of the range twice: lighter band or less weight" };
+    const lower = [...steps].reverse().find((s) => s.rung < last.rung);
+    if (lower) return { rung: lower.rung, extra: 0, change: "down", why: "missed the bottom of the range twice running" };
+  }
+  return hold;
+}
+
+/* Saves a log on a day. A logged workout sets that day's session type; an automatic HR session keeps its minutes and load. */
+export function applyWorkoutLog(history, date, workout, now = Date.now()) {
+  const prev = history.find((h) => h.date === date) || { date };
+  const next = { ...prev, workout: workout ? { ...workout, updatedAt: now } : null, updatedAt: now };
+  if (workout && prev.session?.auto) next.session = { ...prev.session, type: dayTypeOf(workout.dayType) };
+  return [...history.filter((h) => h.date !== date), next].sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/* The day's session for load and the week view: the log sets the type, the HR session the minutes and load */
+export function daySession(day) {
+  if (!day) return null;
+  const auto = day.session?.auto && !day.session.dismissed ? day.session : null;
+  if (day.workout) return { type: dayTypeOf(day.workout.dayType), minutes: auto?.minutes ?? day.workout.minutes ?? null, load: auto?.load ?? null, source: auto ? "log+hr" : "log" };
+  return auto ? { type: auto.type, minutes: auto.minutes, load: auto.load, source: "hr" } : null;
+}
+
+/* Ticking the balance or calf drill in the mobility panel */
+export function markExtraDone(history, date, ex, done, now = Date.now()) {
+  const prev = history.find((h) => h.date === date) || { date };
+  const extrasDone = { ...(prev.extrasDone || {}) };
+  if (done) extrasDone[ex.pattern] = { id: ex.id, rung: ex.rung };
+  else delete extrasDone[ex.pattern];
+  return [...history.filter((h) => h.date !== date), { ...prev, extrasDone, updatedAt: now }].sort((a, b) => a.date.localeCompare(b.date));
 }
 
 /* The rung to use: the wanted one if the kit and the ankle allow it, else the nearest easier one, else the nearest harder */
@@ -190,6 +267,7 @@ export function buildSession({ dayType, archetypeId, decision = null, directives
   const plan = TRAINING.sessions[type];
   if (!plan) return null;
   const label = plan.label;
+  if (today) history = history.filter((h) => h.date < today); // today's own log never re-plans today's session
   const equipment = Array.isArray(profile?.equipment) ? profile.equipment : TRAINING.defaultEquipment;
   const sessionMinutes = TRAINING.roundsByMinutes[profile?.sessionMinutes] ? profile.sessionMinutes : TRAINING.defaultMinutes;
 
@@ -215,12 +293,17 @@ export function buildSession({ dayType, archetypeId, decision = null, directives
   if (soreLegs) why.push(`lower-body soreness ${checkin.lower}/5: legs one rung easier and one round fewer`);
   if (footballTomorrow) why.push("football tomorrow: no Nordic, legs one round fewer");
 
+  const progress = {};
   const rungFor = (pattern) => {
-    let r = currentRung(history, pattern) ?? TRAINING.startRung;
+    const next = nextRung(history, pattern);
+    let r = next?.rung ?? TRAINING.startRung;
     if (soreLegs && TRAINING.lowerPatterns.includes(pattern)) r -= 1;
-    return pickRung(pattern, r, { equipment, ankleMax });
+    const ex = pickRung(pattern, r, { equipment, ankleMax });
+    if (ex) progress[ex.id] = { extra: ex.rung === next?.rung ? next.extra : 0, change: ex.rung === next?.rung ? next.change : next ? "adjusted" : "start", why: next?.why };
+    return ex;
   };
   const item = (ex, rounds) => ({ id: ex.id, pattern: ex.pattern, rung: ex.rung, name: ex.name, sets: rounds, reps: targetReps(ex), unit: ex.unit, side: ex.side,
+    extra: progress[ex.id]?.extra ?? 0, change: progress[ex.id]?.change ?? "start",
     effort: failure ? "1–2 in reserve, last set to failure" : high ? "1–2 in reserve" : "2–3 in reserve" });
 
   const ranges = RANGE_DRILLS.filter((d) => d.needs.every((n) => equipment.includes(n)) && !(flare && d.ankle >= 1));
@@ -239,8 +322,8 @@ export function buildSession({ dayType, archetypeId, decision = null, directives
   const balanceRung = currentRung(history, "balance") ?? 0;
   const g = TRAINING.powerGate;
   const legsReady = !flare && (checkin.ankleHip ?? 5) < g.ankleHipBelow && (checkin.lower ?? 5) < g.lowerBelow && balanceRung >= g.balanceRung;
-  const powerL = pickRung("power-l", legsReady ? currentRung(history, "power-l") ?? 1 : 0, { equipment, ankleMax: legsReady ? 2 : 0 });
-  const powerU = pickRung("power-u", currentRung(history, "power-u") ?? 1, { equipment });
+  const powerL = pickRung("power-l", legsReady ? Math.max(1, nextRung(history, "power-l")?.rung ?? 1) : 0, { equipment, ankleMax: legsReady ? 2 : 0 });
+  const powerU = pickRung("power-u", nextRung(history, "power-u")?.rung ?? 1, { equipment });
   if (high) power.push(powerL, powerU);
   else power.push(legsReady ? powerL : powerU);
   const powerItems = power.filter(Boolean).map((ex) => ({ id: ex.id, pattern: ex.pattern, rung: ex.rung, name: ex.name, sets: ex.sets, reps: ex.reps, unit: ex.unit, side: ex.side, effort: "fast, stop when reps slow" }));
@@ -260,8 +343,8 @@ export function buildSession({ dayType, archetypeId, decision = null, directives
 
 /* Daily balance drill for the mobility panel (rungs 1–3 on an ankle flare) and calves on strength days */
 export function mobilityExtras({ history = [], flare = false, strengthDay = false, equipment = TRAINING.defaultEquipment } = {}) {
-  const want = Math.max(1, currentRung(history, "balance") ?? 1);
+  const want = Math.max(1, nextRung(history, "balance")?.rung ?? 1);
   const balance = pickRung("balance", flare ? Math.min(want, TRAINING.balanceFlareMax) : want, { equipment, ankleMax: flare ? 1 : 2 });
-  const calf = strengthDay ? pickRung("calf", currentRung(history, "calf") ?? TRAINING.startRung, { equipment, ankleMax: flare ? 1 : 2 }) : null;
+  const calf = strengthDay ? pickRung("calf", nextRung(history, "calf")?.rung ?? TRAINING.startRung, { equipment, ankleMax: flare ? 1 : 2 }) : null;
   return [balance, calf].filter(Boolean);
 }
