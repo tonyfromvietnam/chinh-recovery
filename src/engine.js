@@ -15,6 +15,7 @@ import {
 import { hrvTrend, rhrRun, trainingDecision, applyDecision, LOAD } from "./engine/load.js";
 import { baselineNights, chronotypeShiftMin } from "./engine/learning.js";
 import { zoneMinutes, autoSession, hrLoadSummary, personalMaxHr, activityVitals, addEasyWalk, spo2Status, sleepStages } from "./engine/strap.js";
+import { buildSession, mobilityExtras, isStrengthDay, dayTypeOf, formatDose } from "./engine/exercises.js";
 
 export { dateKey, shiftKey };
 export * from "./engine/util.js";
@@ -23,6 +24,7 @@ export * from "./engine/brief.js";
 export * from "./engine/load.js";
 export * from "./engine/learning.js";
 export * from "./engine/strap.js";
+export * from "./engine/exercises.js";
 
 export const SLEEP_TARGET_H = 8;
 export const BASELINE_WINDOW_DAYS = 30;
@@ -549,6 +551,10 @@ export function planDay({ checkin, history, today, profile = null }) {
     directives.push({ id: "spacing", level: "adjust", title: "Football tomorrow: keep legs light",
       why: `Heavy legs today leave about 24 h before football (aim for ${LOAD.lowerBeforeFootballH} h).`,
       action: "Swap to upper body, or halve lower-body volume." });
+  } else if (isStrengthDay(planned) && tomorrowPlanned === "football") {
+    directives.push({ id: "spacing", level: "adjust", title: "Football tomorrow: keep legs light",
+      why: `Leg work today leaves about 24 h before football (aim for ${LOAD.lowerBeforeFootballH} h).`,
+      action: "Today's session already drops the Nordic and one round of leg work." });
   }
   if (override) {
     directives = directives.filter((d) => d.id !== "push");
@@ -580,6 +586,16 @@ export function planDay({ checkin, history, today, profile = null }) {
     if (shift) schedule = schedule.map((i) => (i.type === "wind" ? i : { ...i, time: fromMin(toMin(i.time) + shift) }));
   }
 
+  // ---- Today's strength session (M8.1): the engine set how hard; this picks what
+  const session = isStrengthDay(planned)
+    ? buildSession({ dayType: planned, archetypeId: archetype.id, decision, directives, profile, history, checkin, today })
+    : null;
+  if (session && !session.recovery) {
+    schedule = schedule.map((i) => (i.slot !== "training" ? i : { ...i, type: "training", dur: session.minutes,
+      title: `${session.label} · ${session.minutes} min${{ cap: " — cap at RPE 8", push: " — push", reduce: " — reduced" }[decision?.decision] ?? ""}`,
+      detail: `${session.blocks.map((b) => b.pair.map((p) => p.name).join(" + ")).join(" · ")}. ${decision?.detail ?? ""}`.trim() }));
+  }
+
   // ---- Morning brief (needs a profile)
   const debt = sleepDebt(checkin.sleepHours, baselines.recentSleep, sleepNeedH);
   let brief = null;
@@ -600,7 +616,12 @@ export function planDay({ checkin, history, today, profile = null }) {
 
   return {
     baselines, result, archetype, directives, schedule,
-    drills: buildMobility(checkin, archetype.id),
+    drills: [...buildMobility(checkin, archetype.id), ...mobilityExtras({ history, flare: directives.some((d) => d.id === "ankle-flare"),
+      strengthDay: !!session && !session.recovery, equipment: profile?.equipment }).map((ex) => ({
+      id: ex.id, name: ex.name, area: ex.pattern === "calf" ? "ankle" : "balance", dose: formatDose(ex), required: false,
+      cue: ex.pattern === "calf" ? "Full range, slow down. Strength days only." : "Ankle rehab: most days for at least 6 weeks after the sprain.",
+      load: checkin.ankleHip, priority: checkin.ankleHip >= 4 ? "High" : checkin.ankleHip >= 3 ? "Medium" : "Maintain" }))],
+    session,
     sleepDebt: debt,
     confidence: dataConfidence({ ...checkin, override }),
     baselineNights: baselineNights(withToday, today),

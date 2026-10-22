@@ -9,13 +9,15 @@ export const TARGETS = {
 };
 
 export const SESSION_DEFAULTS = {
+  "full-a": { label: "Full A" },
+  "full-b": { label: "Full B" },
   upper: { label: "Upper-body" },
   lower: { label: "Lower-body" },
   football: { label: "Football" },
   zone2: { label: "Zone 2" },
   rest: { label: "Rest" },
 };
-const HARD = new Set(["upper", "lower", "football"]);
+const HARD = new Set(["full-a", "full-b", "upper", "lower", "football"]);
 export const isHardSession = (t) => HARD.has(t);
 
 /* ---------- Profile helpers ---------- */
