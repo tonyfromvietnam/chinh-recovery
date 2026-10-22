@@ -540,6 +540,9 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 - The exercise library and ladders live in `docs/knowledge/calisthenics-and-bands.md` and `src/engine/exercises.js`; the AI can only use ids from it.
 
 ### M8.1 New plan and rule-based sessions (no AI)
+
+**Status:** built (`src/engine/exercises.js`, `TrainingCard`, settings, `tests/exercises.test.js`). Rungs and the power-l balance gate read `workout` logs, which arrive with M8.2; until then sessions start at rung 2, leg power stays at rung 0, and the "short week adds the Nordic/Copenhagen" catch-up waits for the log too. A `reduce` decision also takes a round off, and `cap`/`reduce` days never go to failure.
+
 - **Profile (settings) adds:** `equipment` (default `["bands", "bar", "dip"]`, the owner's kit; each can be switched off, e.g. when travelling), `sessionMinutes` (20 / 30 / 45, default 30). Exercises whose `needs` aren't in `equipment` are skipped and the ladder falls back to the nearest rung without them. Settings now hold wake times, the weekly plan, equipment and session length.
 - **Template options:** `full-a`, `full-b`, `football`, `zone2`, `rest`. `upper` / `lower` stay valid for old profiles and map to Full A / Full B.
 - **Suggested default week:** Mon Full A · Tue rest · Wed Football · Thu Full B · Fri rest · Sat Football · Sun mobility only. About 1 h of strength a week instead of about 4 h, still ≥ 4 hard sets per muscle group (about 6 a week for each main muscle group across Full A and B, e.g. chest from dips + push-ups, back from both pulls). Both sessions include the Nordic, so two Nordic sessions a week need no optional day, and they're 72 h apart and never the day before football. The mobility panel runs every day and now includes the balance drill (see below).

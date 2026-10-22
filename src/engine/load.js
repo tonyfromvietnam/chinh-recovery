@@ -48,6 +48,8 @@ export function rhrRun(history, today, baselineRhr, delta, todayRhr) {
 }
 
 /* ---------- Weekly template spacing ---------- */
+const LEG_DAYS = new Set(["lower", "full-a", "full-b"]); // the M8 full-body sessions train legs too
+
 export function spacingConflicts(profile, footballRecoveryH = LOAD.defaultFootballRecoveryH) {
   const t = profile?.template;
   if (!t) return [];
@@ -56,11 +58,11 @@ export function spacingConflicts(profile, footballRecoveryH = LOAD.defaultFootba
     for (let gap = 0; gap <= 3; gap++) {
       const b = WEEKDAYS[(i + gap) % 7];
       const hours = gap * 24;
-      if (t[a] === "lower" && t[b] === "football" && hours < LOAD.lowerBeforeFootballH) {
+      if (LEG_DAYS.has(t[a]) && t[b] === "football" && hours < LOAD.lowerBeforeFootballH) {
         out.push({ from: a, to: b, hours, rule: "lower-before-football",
-          text: `Heavy legs on ${cap(a)} is ${hours} h before football on ${cap(b)} (keep ${LOAD.lowerBeforeFootballH} h).` });
+          text: `Leg training on ${cap(a)} is ${hours} h before football on ${cap(b)} (keep ${LOAD.lowerBeforeFootballH} h).` });
       }
-      if (gap > 0 && t[a] === "football" && t[b] === "lower" && hours < footballRecoveryH) {
+      if (gap > 0 && t[a] === "football" && LEG_DAYS.has(t[b]) && hours < footballRecoveryH) {
         out.push({ from: a, to: b, hours, rule: "football-before-lower",
           text: `Football on ${cap(a)} leaves ${hours} h before heavy legs on ${cap(b)} (you need ~${footballRecoveryH} h).` });
       }

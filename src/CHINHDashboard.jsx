@@ -18,6 +18,7 @@ import BriefCard, { BriefSetupCard } from "./components/BriefCard.jsx";
 import SettingsModal from "./components/SettingsModal.jsx";
 import InsightsCard from "./components/InsightsCard.jsx";
 import HrLoadCard from "./components/HrLoadCard.jsx";
+import TrainingCard from "./components/TrainingCard.jsx";
 
 /* =========================================================================
    Storage (on this device only — wrapped so private mode never crashes)
@@ -1037,6 +1038,12 @@ export default function CHINHDashboard() {
         <div className="mt-4">
           <VitalsStrip c={checkin} result={result} baselines={baselines} sleepDebt={day.sleepDebt} activity={day.activity} spo2={day.spo2} />
         </div>
+
+        {day.session && (
+          <div className="mt-4">
+            <TrainingCard session={day.session} onOpenSettings={() => setSettingsOpen(true)} />
+          </div>
+        )}
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
           <ScheduleTimeline items={schedule} done={done} toggle={toggle} accent={archetype.color} />
