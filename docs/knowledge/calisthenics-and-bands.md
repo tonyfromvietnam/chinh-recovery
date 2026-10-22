@@ -2,6 +2,8 @@
 
 Owner's kit (22 Oct 2026): bodyweight, resistance bands, a **pull-up bar** and **dip bars**. Exercises that need a bar are marked in the `Needs` column. A backpack with books works as extra load once a bar exercise gets easy.
 
+**Goal:** strong for your size, springy and mobile, so you move easily (football, and the way a fighter moves) and look athletic. Strength for bodyweight, power and range come first; size is a side effect, not the aim.
+
 Each movement pattern is a **ladder**: easiest first. You move up a rung when the progression rule says so (see the end of this file). `Ankle` is how much the exercise loads the injured ankle: **0** none, **1** low (standing, stable), **2** high (deep single-leg dorsiflexion, landing, hopping).
 
 ## Lower body
@@ -98,6 +100,42 @@ Banded curl, banded triceps pushdown, 12–20 reps; or bench dips on the dip bar
 | 7 | Tuck L-sit on the dip bars | 10–30 s |
 | 8 | Hanging leg raise (bar) | 6–12 |
 
+## Power and springiness (`power-l`, `power-u`)
+
+Short, fast, never to failure: 3–5 reps per set, full rest, stop the moment the reps slow down or landings get loud. This is the "elastic" work: jump training stiffens tendons (springier, more efficient movement), and punch and kick force comes mostly from the legs and hip rotation.
+
+### Lower-body power (`power-l`), only when the ankle allows (see the rules)
+| Rung | Exercise | Dose | Ankle |
+|---|---|---|---|
+| 0 | Explosive glute bridge (fast up, 2 s down), the fallback while the ankle isn't ready | 3 × 6 | 0 |
+| 1 | Low pogo hops, double-leg, soft and quiet | 2 × 15 s | 2 |
+| 2 | Squat jump, stick the landing | 3 × 4 | 2 |
+| 3 | Broad jump, stick the landing | 3 × 3 | 2 |
+| 4 | Lateral bound, stick each side | 3 × 3 / side | 2 |
+| 5 | Continuous lateral bounds | 3 × 6 / side | 2 |
+| 6 | Single-leg pogo hops | 2 × 10 / side | 2 |
+
+### Upper-body and rotational power (`power-u`)
+| Rung | Exercise | Dose | Needs |
+|---|---|---|---|
+| 1 | Fast band punches (band anchored behind), fast out, slow back | 3 × 8 / side | band anchor |
+| 2 | Band rotational chop, high to low, driven from the hips | 3 × 6 / side | band anchor |
+| 3 | Explosive push-up (hands leave the floor) | 3 × 4 | |
+| 4 | Explosive pull-up (chest towards the bar) | 3 × 3 | bar |
+| 5 | Clap push-up | 3 × 4 | |
+
+## Loaded end-range (`range`)
+
+Strength training improves flexibility as much as stretching, but in the research bodyweight-only training didn't; added load did. So one of these goes into the rest after each superset pair, using a band or the backpack. It adds no time.
+
+| Drill | Dose | Ankle |
+|---|---|---|
+| Cossack squat holding the backpack | 4 / side, 2 s at the bottom | 1 |
+| Deep split-squat hold, back knee down | 30 s / side | 1 |
+| Dead hang (bar) | 30–45 s | 0 |
+| Band shoulder pass-through | 10 slow | 0 |
+| Band-loaded straddle good morning | 8 slow | 0 |
+
 ## Football prehab (always programmed)
 
 ### Nordic hamstring (`nordic`), 2× a week, never the day before football
@@ -125,8 +163,8 @@ Banded curl, banded triceps pushdown, 12–20 reps; or bench dips on the dip bar
 
 ## Session shape (30 min default)
 
-1. **Warm-up, 4 min:** Knee-to-Wall Pulses and World's Greatest Stretch, 5 each side. The full mobility list stays in the mobility panel.
-2. **Three supersets, 22 min:** pairs of opposite patterns (push with pull, squat with hinge), 3 rounds, 60–90 s rest after each pair.
+1. **Warm-up and power primer, 5 min:** Knee-to-Wall Pulses and World's Greatest Stretch (2 min), then 3 min of power while you're fresh: `power-l` if the ankle allows, otherwise `power-u`; High Output days do both. The full mobility list stays in the mobility panel.
+2. **Three supersets, 21 min:** pairs of opposite patterns (push with pull, squat with hinge), 3 rounds, 60–90 s rest after each pair, with one `range` drill done in that rest.
    - Full A: `squat` + `pull-v` · `dip` + `hinge` · `nordic` + `core`
    - Full B: `push-h` + `pull-h` · `squat` + `push-v` · `copenhagen` + `calf`
    - Across the week that's 2 pulling and 3 pushing patterns, with squats twice and hinges plus Nordics for the hamstrings.
@@ -136,8 +174,9 @@ For 20 minutes: 2 rounds of each superset. For 45: 4 rounds, or add `arms`.
 
 ## Progression rule (double progression with reps in reserve)
 
-- **Effort target:** stop each set with **2 reps in reserve (RIR)**. The **last set** of each exercise goes to **technical failure** (the rep where form breaks), because people judge RIR badly on high-rep sets and the last set tells you the truth.
-- **Move up a rung:** when every set reaches the top of the rep range at the target effort in **two sessions running**. Start the new rung at the bottom of its range.
+- **Strength for your size, not bulk:** on the main patterns (squat, hinge, push, dip, pull) aim for **5–10 reps**. Once a rung allows 12 or more clean reps, move up a rung instead of chasing the top of the range. Prehab, core and calves keep their own ranges.
+- **Effort target:** stop each set with **1–2 reps in reserve (RIR)**. On **High Output days only**, the **last set** of each exercise goes to **technical failure** (the rep where form breaks), as a check on how well you're judging RIR. Power work is never taken near failure.
+- **Move up a rung:** when every set reaches the top of the rep range (or 10 reps, whichever is lower, on the main patterns) at the target effort in **two sessions running**. Start the new rung at the bottom of its range.
 - **Step down a rung:** when you miss the bottom of the range twice running.
 - **Bands and backpacks:** a heavier band, or more weight in the backpack, counts as half a rung: same exercise, reset to the bottom of the range.
-- **Readiness changes the dose, not the rung:** High Output days do all rounds with the last set to failure. Balanced Flow days drop a round and keep every set at 2–3 RIR. Active Restoration days have no strength work, only the balance finisher and the mobility panel.
+- **Readiness changes the dose, not the rung:** High Output days do all rounds, both power blocks and the last set to failure. Balanced Flow days drop a round, do one power block and keep every set at 2–3 RIR. Active Restoration days have no strength or power work, only the balance finisher and the mobility panel.
