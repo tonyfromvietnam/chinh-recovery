@@ -57,7 +57,7 @@ docs/                  Apple Health Shortcut guide
 - [x] M7 More from the Helio Strap: heart-rate training load, steps & active energy, overnight blood oxygen, sleep stages (Shortcut: `docs/APPLE_HEALTH_SHORTCUT.md` section 2c)
 - [ ] M8 Your trainer: calisthenics sessions (pull-up bar, dip bars, bands) that adapt to recovery, a 30-second session log, a training week view and an AI trainer (see `docs/TECH_SPEC.md`)
 
-**Scope:** CHINH only uses what the Amazfit Helio Strap measures (via Zepp → Apple Health) plus the quick check-in ratings. It stays a website, hosted on Vercel. Evening check-out, session logging, ankle tests, experiments, water/food targets, calendar and weather were removed on 19 Oct 2026.
+**Scope:** CHINH only uses what the Amazfit Helio Strap measures (via Zepp → Apple Health) plus the quick check-in ratings. It stays a website, hosted on Vercel. Evening check-out, session logging, ankle tests, experiments, water/food targets, calendar and weather were removed on 19 Oct 2026. On 22 Oct 2026 two came back for M8: a quick session log (for progression) and an AI trainer that picks exercises within the engine's rules.
 
 ## Privacy
 

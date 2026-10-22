@@ -33,7 +33,7 @@ Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
 - A stale sleep-quality rating (not rated today) means sleep is scored on duration only; it is still 35 %.
 - Learned values (sleep need, chronotype) never change the score weights.
 - Ankle/hip stiffness counts double (ongoing ankle sprain rehab).
-- Mobility list always includes Knee-to-Wall Dynamic Pulses, 90/90 Hip Switches, World's Greatest Stretch and Cossack Squats.
+- Mobility list always includes Knee-to-Wall Dynamic Pulses, 90/90 Hip Switches, World's Greatest Stretch and Cossack Squats. From M8.1 it also carries the daily `balance` drill (rungs 1–3 on an ankle flare).
 - Every direction states the action and the number that triggered it.
 
 ## Reference
