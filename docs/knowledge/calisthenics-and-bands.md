@@ -118,11 +118,13 @@ Short, fast, never to failure: 3–5 reps per set, full rest, stop the moment th
 ### Upper-body and rotational power (`power-u`)
 | Rung | Exercise | Dose | Needs |
 |---|---|---|---|
-| 1 | Fast band punches (band anchored behind), fast out, slow back | 3 × 8 / side | band anchor |
-| 2 | Band rotational chop, high to low, driven from the hips | 3 × 6 / side | band anchor |
-| 3 | Explosive push-up (hands leave the floor) | 3 × 4 | |
-| 4 | Explosive pull-up (chest towards the bar) | 3 × 3 | bar |
-| 5 | Clap push-up | 3 × 4 | |
+| 1 | Band rotational chop, high to low, driven from the hips | 3 × 6 / side | band anchor |
+| 2 | Explosive push-up (hands leave the floor) | 3 × 4 | |
+| 3 | Explosive pull-up (chest towards the bar) | 3 × 3 | bar |
+| 4 | Clap push-up | 3 × 4 | |
+| 5 | Fast band punches (band anchored behind), driven by the back foot and hip turn, fast out, slow back | 3 × 8 / side | band anchor |
+
+Punch and kick force comes mostly from the legs and trunk, not upper-body strength, so the hip-driven chop comes first and band punches sit at the top as a skill rung, not the main power driver.
 
 ## Loaded end-range (`range`)
 
@@ -164,19 +166,20 @@ Strength training improves flexibility as much as stretching, but in the researc
 ## Session shape (30 min default)
 
 1. **Warm-up and power primer, 5 min:** Knee-to-Wall Pulses and World's Greatest Stretch (2 min), then 3 min of power while you're fresh: `power-l` if the ankle allows, otherwise `power-u`; High Output days do both. The full mobility list stays in the mobility panel.
-2. **Three supersets, 21 min:** pairs of opposite patterns (push with pull, squat with hinge), 3 rounds, 60–90 s rest after each pair, with one `range` drill done in that rest.
+2. **Three supersets, about 20–23 min:** pairs of opposite patterns (push with pull, squat with hinge), 3 rounds, **45–60 s** rest after each pair (each pair alternates opposite muscles, so short rest is enough), with one `range` drill done in that rest.
    - Full A: `squat` + `pull-v` · `dip` + `hinge` · `nordic` + `core`
-   - Full B: `push-h` + `pull-h` · `squat` + `push-v` · `copenhagen` + `calf`
-   - Across the week that's 2 pulling and 3 pushing patterns, with squats twice and hinges plus Nordics for the hamstrings.
-3. **Finisher, 4 min:** `balance`.
+   - Full B: `push-h` + `pull-h` · `squat` + `push-v` · `nordic` + `copenhagen`
+   - Across the week that's 2 pulling and 3 pushing patterns, squats twice, and the Nordic in both sessions (twice a week, 72 h apart in the suggested week).
+3. **No finisher:** `balance` (and a single-leg calf raise from the `calf` ladder on strength days) lives in the daily mobility panel instead, since it's meant to be done most days anyway.
 
-For 20 minutes: 2 rounds of each superset. For 45: 4 rounds, or add `arms`.
+**Timing:** count about 45 s per set plus the rest. A 30-minute session is 5 min warm-up and power + 3 pairs × 3 rounds ≈ 25–28 min. For 20 minutes: 2 rounds of each superset. For 45: 4 rounds, or add `arms`.
 
 ## Progression rule (double progression with reps in reserve)
 
 - **Strength for your size, not bulk:** on the main patterns (squat, hinge, push, dip, pull) aim for **5–10 reps**. Once a rung allows 12 or more clean reps, move up a rung instead of chasing the top of the range. Prehab, core and calves keep their own ranges.
+- **Entry rungs:** a rung whose range starts at 12 or more (box squat, bodyweight squat, glute bridge, banded seated row) is an entry rung. It progresses at the top of its own range, so you don't skip it straight away; the 5–10 target starts from the first harder rung.
 - **Effort target:** stop each set with **1–2 reps in reserve (RIR)**. On **High Output days only**, the **last set** of each exercise goes to **technical failure** (the rep where form breaks), as a check on how well you're judging RIR. Power work is never taken near failure.
 - **Move up a rung:** when every set reaches the top of the rep range (or 10 reps, whichever is lower, on the main patterns) at the target effort in **two sessions running**. Start the new rung at the bottom of its range.
 - **Step down a rung:** when you miss the bottom of the range twice running.
 - **Bands and backpacks:** a heavier band, or more weight in the backpack, counts as half a rung: same exercise, reset to the bottom of the range.
-- **Readiness changes the dose, not the rung:** High Output days do all rounds, both power blocks and the last set to failure. Balanced Flow days drop a round, do one power block and keep every set at 2–3 RIR. Active Restoration days have no strength or power work, only the balance finisher and the mobility panel.
+- **Readiness changes the dose, not the rung:** High Output days do all rounds, both power blocks and the last set to failure. Balanced Flow days drop a round, do one power block and keep every set at 2–3 RIR. Active Restoration days have no strength or power work, only the mobility panel (which includes balance).

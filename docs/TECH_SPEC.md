@@ -517,7 +517,7 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 
 ### M7 follow-ups (from the strap research, 22 Oct 2026)
 - **M7.0 data check (on the phone, no code):** in Health → Browse, note whether Zepp writes Blood Oxygen, Respiratory Rate and sleep stages, and the HR sample interval during a workout. If Blood Oxygen is empty, M7.3 stays dormant. Reviews and Zepp's own pages disagree on SpO2, and HRV arrives as only 2–4 points a night (RMSSD stored in HealthKit's SDNN field).
-- **Session guards:** reviews say the strap's auto workout detection invents sessions. Tighten `autoSession` to need ≥ 20 min in zone 2+ as well as `HR.sessionMin`, and let a one-tap "not a session" set `session.dismissed = true` (excluded from load and learning).
+- **Session guards:** CHINH detects sessions from yesterday's heart-rate zones, not from Zepp's workout detection (Shortcuts can't read workouts), but a long walking day can still cross `HR.sessionMin` on zone 1–2 minutes alone. Tighten `autoSession` to need ≥ 20 min in zone 2+ as well as `HR.sessionMin`, and let a one-tap "not a session" set `session.dismissed = true` (excluded from load and learning). If the M7.0 check shows HR samples about 2 minutes apart during training, set `hri=120` before tuning these thresholds: zone minutes are coarse at that spacing.
 - **Routes not used:** the unofficial Zepp API (against Zepp's terms, token expires about every 30 days), Zepp's deprecated developer REST API, Strava's API (third-party, needs a subscription).
 
 ---
@@ -542,25 +542,28 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 ### M8.1 New plan and rule-based sessions (no AI)
 - **Profile (settings) adds:** `equipment` (default `["bands", "bar", "dip"]`, the owner's kit; each can be switched off, e.g. when travelling), `sessionMinutes` (20 / 30 / 45, default 30). Exercises whose `needs` aren't in `equipment` are skipped and the ladder falls back to the nearest rung without them. Settings now hold wake times, the weekly plan, equipment and session length.
 - **Template options:** `full-a`, `full-b`, `football`, `zone2`, `rest`. `upper` / `lower` stay valid for old profiles and map to Full A / Full B.
-- **Suggested default week:** Mon Full A · Tue rest · Wed Football · Thu Full B · Fri rest · Sat Football · Sun Full A (optional; skip if short of time). About 1.5 h of strength a week instead of about 4 h, still ≥ 4 hard sets per muscle group. The 10-min mobility panel and the balance finisher run every day.
-- **`src/engine/exercises.js`:** `EXERCISES` (id, pattern, rung, reps, ankle 0–2, needs) and `buildSession({ dayType, archetypeId, decision, directives, profile, history })` returning `{ blocks: [{ pair: [ex, ex], rounds, restSec }], finisher, minutes, why }`.
+- **Suggested default week:** Mon Full A · Tue rest · Wed Football · Thu Full B · Fri rest · Sat Football · Sun mobility only. About 1 h of strength a week instead of about 4 h, still ≥ 4 hard sets per muscle group (about 6 a week for each main muscle group across Full A and B, e.g. chest from dips + push-ups, back from both pulls). Both sessions include the Nordic, so two Nordic sessions a week need no optional day, and they're 72 h apart and never the day before football. The mobility panel runs every day and now includes the balance drill (see below).
+- **Mobility panel adds balance (and calves):** the `balance` drill moves out of the session into the daily mobility panel, at its ladder rung (rungs 1–3 on `ankle-flare`), with a single-leg calf raise from the `calf` ladder on strength days. The four required drills stay.
+- **`src/engine/exercises.js`:** `EXERCISES` (id, pattern, rung, reps, ankle 0–2, needs) and `buildSession({ dayType, archetypeId, decision, directives, profile, history })` returning `{ power, blocks: [{ pair: [ex, ex], rounds, restSec }], minutes, why }`.
 - **Rules inside `buildSession`:**
-  - High Output: all rounds, last set to failure. Balanced Flow: one round fewer, 2–3 RIR. Active Restoration, or `hrv-low` / `rhr-high` stop: no strength block, balance finisher and mobility only.
+  - High Output: all rounds, last set to failure. Balanced Flow: one round fewer, 2–3 RIR. Active Restoration, or `hrv-low` / `rhr-high` stop: no strength or power block, the mobility panel (with balance) only.
   - `ankle-flare` (ankle/hip ≥ 4): no exercise with ankle load 2; balance stays at rungs 1–3.
   - Lower-body soreness ≥ 4: lower patterns drop to rung − 1 and one round fewer.
   - **Power primer** (first 3 min after the warm-up): High Output gets `power-l` and `power-u`, Balanced Flow one of them, Active Restoration none. `power-l` above rung 0 only when ankle/hip < 3, lower-body soreness < 4, no `ankle-flare`, and the balance ladder has reached rung 4 in the log; otherwise rung 0 or `power-u`. Power sets are never to failure and aren't counted as hard sets.
-  - **Strength bias:** main patterns target 5–10 reps; a rung that allows ≥ 12 clean reps triggers a rung up. Last set to failure only on High Output days.
+  - **Strength bias:** entry rungs (a rep range that starts at 12 or more: `squat` 1–2, `hinge` 1, `pull-h` 1) progress within their own range. From the first harder rung, main patterns target 5–10 reps, and ≥ 12 clean reps triggers a rung up. Last set to failure only on High Output days.
+  - **Time:** supersets alternate opposite muscles, so rest is 45–60 s after each pair (the `range` drill fits in it). `estimateMinutes` = 5 min warm-up and power + 45 s per set + the stated rest; 30 min ≈ 3 pairs × 3 rounds (about 25–28 min), 20 min = 2 rounds, 45 min = 4 rounds or add `arms`.
   - **Range:** each superset pair gets one `range` drill in its rest; the drill set follows the same ankle rule (ankle 1 drills are skipped on `ankle-flare`).
   - Day before football: no Nordic, lower patterns one round fewer. Nordic is due 2× a week, Copenhagen about 30 reps a week; if a week is short, the next session adds it.
   - Rungs come from the session log (`currentRung(history, pattern)`); with no log, start at rung 2.
 - **Schedule:** the 17:00 training block takes the session's real minutes and title ("Full A · 30 min").
-- **Tests:** each rule above, session minutes ≤ `sessionMinutes`, the ladder start, Nordic spacing, the restoration swap, the `power-l` ankle gate (including the balance-rung condition), rung-up at ≥ 12 reps, failure sets only on High Output days.
+- **Tests:** each rule above, `estimateMinutes` ≤ `sessionMinutes` for 20 / 30 / 45, the ladder start, Nordic in both sessions and never the day before football, the restoration swap, balance and calf in the mobility panel, the `power-l` ankle gate (including the balance-rung condition), entry rungs progressing within their range, rung-up at ≥ 12 reps from the first harder rung, failure sets only on High Output days.
 
 ### M8.2 Session log (about 30 seconds)
 - **Training card:** shows today's session. After training, each exercise is pre-filled with the target reps; you tick it, change a number if it differs, and mark the last set *easy / right / failed*.
 - **Stored on today's record:** `workout = { dayType, exercises: [{ id, rung, reps: [12, 11, 9], last: "right" }], minutes, updatedAt }`. The automatic HR session (M7.1) supplies minutes and load, so nothing is asked twice.
+- **Which session wins:** a logged `workout` sets the day's session type; the automatic HR session only supplies minutes and load (and is never dismissed by a log). With no log, the HR session's type comes from the template as in M7.1. With a log but no HR data, minutes come from the log and load stays unknown (never estimated).
 - **Progression:** `nextRung(history, pattern)` applies the rule at the end of the library doc: top of the range twice running moves up a rung; missing the bottom twice moves down.
-- **Tests:** progression up and down, bands as half a rung, logs merge by `updatedAt`.
+- **Tests:** progression up and down, entry rungs, bands as half a rung, logs merge by `updatedAt`, a log overriding the HR session's type but not its load.
 
 ### M8.3 Training week view
 - **Plan vs done:** the week's template against logged sessions and auto-detected HR sessions, with dismissed sessions left out.
@@ -569,13 +572,15 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 - **Tests:** plan/actual matching, the counts.
 
 ### M8.4 AI trainer (Claude)
-- **Server function:** `api/coach.js` on Vercel. `ANTHROPIC_API_KEY` and `COACH_MODEL` are Vercel environment variables, never in the browser. Requests need a valid Supabase session (the function checks the JWT), so nobody else can spend the key. Limit: one plan a day plus 3 regenerations.
+- **Server function:** `api/coach.js` on Vercel. `ANTHROPIC_API_KEY`, `COACH_MODEL` and `OWNER_EMAIL` are Vercel environment variables, never in the browser.
+- **Who can call it:** the function checks the Supabase session (asks Supabase Auth for the user behind the token) and answers only when that user's email matches `OWNER_EMAIL`, before any call to Claude. Sign-ups also stay off in Supabase (step 6 of `SUPABASE_SETUP.md`). Both, because the key costs money.
+- **Daily limit (Supabase):** one plan a day plus 3 regenerations, kept in a new table `coach_usage (user_id, date, plans, regenerations)` with RLS (users read their own rows only). Counting goes through a `security definer` function `claim_coach_request(kind text) returns boolean` that atomically increments today's row (Europe/London date) and returns false once the limit is reached, so the Vercel function needs only the caller's token, not the service-role key. The function calls it before Claude and returns 429 "Today's plans are used up" when it's false. SQL goes in `supabase/schema.sql`, plus a line in `docs/SUPABASE_SETUP.md`.
 - **Input** (`coachInput(...)`, pure, in the engine): today's archetype, decision, direction ids and their numbers, day type, `sessionMinutes`, equipment, current rung per pattern, the last 6 weeks of logged sessions (per pattern: rung, best reps, last-set effort), HR load 7/42, ankle/hip ratings for 14 days, football days, prehab counts this week, and the rules above as text. No name, email or raw history.
-- **Output:** strict JSON `{ blocks: [{ pair: [{ id, rung, sets, reps, rir }], rounds, restSec }], finisher, why }`; `why` is 1–2 sentences naming the numbers behind the choice.
-- **Validator** (`validateSession(session, constraints)`, pure): ids exist and fit `equipment`; ankle and soreness rules, including the `power-l` gate; power never above 5 reps a set; Nordic spacing; estimated minutes ≤ `sessionMinutes`; rungs within ± 1 of `nextRung`. On failure the card shows the rule-based session from M8.1 with "Standard session: the AI plan didn't pass the checks".
+- **Output:** strict JSON `{ power: [{ id, rung, sets, reps }], blocks: [{ pair: [{ id, rung, sets, reps, rir }], rounds, restSec }], why }`; `why` is 1–2 sentences naming the numbers behind the choice. Balance stays in the mobility panel and isn't the AI's to choose.
+- **Validator** (`validateSession(session, constraints)`, pure): ids exist and fit `equipment`; ankle and soreness rules, including the `power-l` gate; power never above 5 reps a set; Nordic spacing; `restSec` 45–60; `estimateMinutes` (5 min warm-up and power + 45 s a set + rest) ≤ `sessionMinutes`; rungs within ± 1 of `nextRung`. On failure the card shows the rule-based session from M8.1 with "Standard session: the AI plan didn't pass the checks".
 - **Weekly note (Sundays):** the AI also gets the M8.3 week summary and may suggest one change for next week (a template swap or a rung change). It's shown as a suggestion you accept with one tap, never applied automatically.
 - **Cost and privacy:** one small request a day, paid per use on your Anthropic API account. Only the summary leaves the device.
-- **Tests:** `coachInput` contains no identifiers, validator cases (each rule), fallback, time estimate. The API call itself is mocked.
+- **Tests:** `coachInput` contains no identifiers, validator cases (each rule), fallback, time estimate, a non-owner email refused, the 429 once `claim_coach_request` returns false. The API call itself is mocked.
 
 ---
 
