@@ -445,23 +445,33 @@ export function experimentResult(history, experiment)     // reuses tagEffects m
 - **Removed from the plan:** blood tests, Hevy or other training-app imports, phone jump tests, an AI chat, a native iPhone app. CHINH stays a website (hosted on Vercel).
 - **Kept:** the quick check-in ratings (soreness, ankle/hip, energy, sleep quality, ill / high-stress). They are 30 % of the score and the only signal for muscle fatigue.
 
-**What the strap can give us through Apple Health:**
+**What the strap can give us** (research 22 Oct 2026: Zepp, Constant, Sahha, reviews; sources in `docs/FEATURE_RESEARCH.md` §Strap data):
 
-| Signal | Readable by Shortcuts? | Status |
-|---|---|---|
-| Heart-rate samples (incl. during workouts) | Yes | **M7.1** |
-| HRV, resting HR, sleep, bed/wake times | Yes | already used |
-| Steps, active energy | Yes | **M7.2** |
-| Blood oxygen (spot and overnight) | Yes | **M7.3** |
-| Sleep stages | Only if Zepp writes them | **M7.4** (display only) |
-| Workout records | **No**: Shortcuts' Find Health Samples has no Workout type | use HR samples instead |
-| Stress, PAI, Zepp readiness, respiration rate, skin temperature | **No**: stay inside Zepp | out of scope |
+| Signal | Reaches Apple Health? | Readable by Shortcuts? | Status |
+|---|---|---|---|
+| HR samples, all day and in workouts | Yes | Yes | **M7.1** |
+| Resting HR, sleep, bed/wake | Yes | Yes | already used |
+| Overnight HRV | Yes, but sparse (2–4 points a night, RMSSD stored as SDNN) | Yes | already used; treat as a nightly value, not a curve |
+| Steps, active energy | Yes | Yes | **M7.2** |
+| Blood oxygen | Sources disagree | Yes if present | **M7.0 check**, then **M7.3** |
+| Respiratory rate | Unconfirmed | Yes if present | **M7.0 check**; display only if present |
+| Sleep stages (deep / core / REM / awake) | Yes | Yes | **M7.4** (display only) |
+| Workout records | Yes | **No**: Find Health Samples has no Workout type | detect from HR (M7.1) |
+| Stress, skin temperature, BioCharge, PAI, VO2 max, Zepp training load, recovery time, strength reps | No | No | stay in Zepp; out of scope |
+
+**Routes we are not using:** the unofficial Zepp API (zepp-bridge, huami-token, ZeppBridge's "advanced" login) breaks Zepp's terms, needs a home server and the token expires about every 30 days; Zepp's old developer REST API is deprecated; Strava's API is a third-party import (removed 19 Oct) and needs a paid subscription. Zepp's own GDPR data export (Profile → Settings → Exercising user rights) is the one official bulk route; see M7.7.
+
+**Review caveats that shape the design:** overnight HRV agrees closely with Whoop and Oura (safe to build on); Zepp's HR zones use a fixed formula (we set our own); auto workout detection invents sessions (we need guards); REM and time awake are unreliable (display only).
+
+### M7.0 Data check (first, no code)
+On the owner's iPhone, in Health → Browse, note which of these have Zepp data and how often: Blood Oxygen, Respiratory Rate, Sleep stages, Heart Rate during a workout (sample interval). Record the answers in this section. M7.3 is dropped if Blood Oxygen is empty; respiratory rate is added to the M7.4 display if present.
 
 ### Shortcut contract additions (all optional, all about **yesterday** unless noted)
 
 | Param | Example | Meaning |
 |---|---|---|
-| `z` | `12,30,25,10,2` | HR sample counts in zones 1–5 yesterday |
+| `hb` | `40,35,30,22,18,12,8,5,2,0,0` | HR sample counts in 10-bpm bins, 90–200 bpm, yesterday (preferred) |
+| `z` | `12,30,25,10,2` | HR sample counts in zones 1–5 yesterday (older Shortcuts) |
 | `hri` | `60` | seconds between HR samples during activity (default 60) |
 | `hrmax` | `188` | highest HR sample yesterday |
 | `st` | `9450` | steps yesterday |
@@ -470,21 +480,23 @@ export function experimentResult(history, experiment)     // reuses tagEffects m
 | `spo2min` | `92` | overnight minimum, % |
 | `deep`, `rem`, `core` | `62,95,240` | sleep-stage minutes, only if present |
 
-- **Where yesterday's values live:** stored on **yesterday's** day record (`hrZones`, `hrMax`, `steps`, `activeKcal`). Overnight values are stored on **today's** record (`spo2`, `spo2Min`, `stages`).
+- **Where yesterday's values live:** stored on **yesterday's** day record (`hrBins`, `hrZones`, `hrMax`, `steps`, `activeKcal`). Overnight values are stored on **today's** record (`spo2`, `spo2Min`, `stages`).
 - **First task, before any code:** check the strap's HR sample interval during a workout (Health → Heart → Heart Rate → Show All Data). If it isn't ~60 s, set `hri` so counts convert to minutes correctly.
 
 ### M7.1 Heart-rate training load (automatic)
 
 ```js
-export const HR = { zones: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0], maxWindowDays: 90 };
+export const HR = { zones: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0], maxWindowDays: 90, sessionMin: 60, sessionZ2Min: 20 };
 export function personalMaxHr(history, profile)   // profile.maxHr if set, else the 98th percentile of hrMax over 90 days (needs ≥ 10 days), else null
-export function zoneMinutes(counts, hri = 60)    // counts → minutes per zone
+export function zoneBounds(maxHr, restHr)         // heart-rate reserve (Karvonen): rest + pct × (max − rest); falls back to % of max without a resting baseline
+export function zoneMinutes(counts, hri = 60)     // counts → minutes per zone
 export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z × z (z = 1..5)
 ```
-- **Load summary:** `hrLoadSummary` compares this week's `hrLoad` with the 4 weeks before. It's advisory only, and starts once the prior 4 weeks have ≥ 4 days with HR data. There's no manual RPE fallback.
-- **Auto-detected sessions:** if yesterday's `hrLoad` ≥ `HR.sessionMin` (default 60), store `session: { type: template[day], auto: true, minutes: Z2+ minutes }`. Nothing is entered by hand.
-- **Learning:** bring back the football recovery profile (hours until HRV and resting HR return after a match), using auto-detected football days.
-- **Tests:** zone conversion, TRIMP, load summary threshold, auto-session detection, max-HR percentile, football recovery from auto-detected days.
+- **Own zones:** built from your max HR and resting-HR baseline, not Zepp's fixed formula. So the Shortcut doesn't need to know your zones, it sends a histogram instead of zone counts: `hb=` = yesterday's HR sample counts in 10-bpm bins from 90 to 200 (11 numbers). CHINH maps the bins onto your zones (`binsToZones`) and the zones move as your max and resting HR change. `z=` stays accepted for older Shortcuts.
+- **Load summary:** `hrLoadSummary` compares the last 7 days (acute) with the 42 days before (chronic), the same ATL/CTL model Zepp Coach uses. It's advisory only and starts once the chronic window has ≥ 10 days with HR data. There's no manual RPE fallback.
+- **Auto-detected sessions:** yesterday counts as a session only if `hrLoad` ≥ `HR.sessionMin` **and** ≥ `HR.sessionZ2Min` minutes in zone 2+. Stored as `session: { type: template[day], auto: true, minutes, load }`. A one-tap "not a session" dismisses it (`session.dismissed = true`, excluded from load learning).
+- **Learning:** bring back the football recovery profile (hours until HRV and resting HR return after a match) and add HR load vs next-morning HRV: the load above which your HRV usually drops the next day.
+- **Tests:** zone bounds (with and without resting baseline), bins → zones, zone conversion, TRIMP, 7/42 summary threshold, session guards and dismissal, max-HR percentile, football recovery from auto-detected days.
 
 ### M7.2 Steps and active energy
 - **Vitals strip:** shows yesterday's steps and active energy, against your 30-day median.
@@ -500,12 +512,22 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 - **Tests:** baseline, supporting-only behaviour, the artefact note.
 
 ### M7.4 Sleep stages (display only)
-- **When present:** if Sleep samples include Core/Deep/REM, the Shortcut sends minutes and CHINH shows a stacked bar on the recovery card.
-- **Not used in the score or directions:** consumer staging isn't accurate enough to act on. The stages are display only.
+- **When present:** if Sleep samples include Core/Deep/REM/Awake, the Shortcut sends minutes and CHINH shows a stacked bar on the recovery card, with deep-sleep minutes against your 30-day median. Respiratory rate joins the bar if M7.0 found it.
+- **Not used in the score or directions:** consumer staging isn't accurate enough to act on; reviews say the strap's REM and time awake are the weakest parts.
 
 ### M7.5 Hosting on Vercel (done)
 - **Hosting:** the site deploys from `main` via Vercel's Git integration. `vercel.json` runs the tests before every build.
 - **CI:** GitHub Actions still tests and builds every PR. GitHub Pages is retired.
+
+### M7.6 Training week view
+- **What it shows:** the 7 days of the profile's weekly plan (Upper, Lower, Football, Rest…) next to what the HR data says happened: auto-detected session, minutes, load, and the morning's train / cap / reduce / recover call.
+- **Weekly numbers:** planned vs done sessions, total load vs your 42-day weekly average, and football days followed by a recovered morning.
+- **Feeds `weeklyReview`:** adds `sessionsPlanned`, `sessionsDone` and `load` to the week-on-week comparison.
+- **Tests:** plan/actual matching by date, dismissed sessions excluded, week totals.
+
+### M7.7 Zepp data export import (optional, later; owner to confirm)
+- Zepp's official export may hold VO2 max, training load, stress and full HRV. It's manual (request in the Zepp app, file arrives later) and the format isn't documented.
+- Only start once the owner has an export in `data/` (git-ignored) to inspect. Parse in the browser, never upload the file anywhere. Show long-term trends only; nothing from it enters the score.
 
 ---
 
@@ -520,6 +542,6 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 | M4 | "Implement M4 from docs/TECH_SPEC.md: weekly ankle tests and chart." |
 | M5 | "Implement M5 from docs/TECH_SPEC.md: learning functions and the Insights card." |
 | M6 | "Implement M6 from docs/TECH_SPEC.md: personal experiments." |
-| M7 | "Implement M7.1 from docs/TECH_SPEC.md (HR load), then M7.2–M7.4, one PR each." |
+| M7 | "Do M7.0, then implement M7.1 from docs/TECH_SPEC.md (HR load), then M7.2, M7.3, M7.4, M7.6, one PR each. M7.7 only when asked." |
 
 After each merge: run the morning Shortcut once to check the live site on Vercel, and update `CLAUDE.md` if an architecture note changed.

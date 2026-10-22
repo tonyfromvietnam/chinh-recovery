@@ -211,6 +211,20 @@ Pick a fact **tied to today's data**, with its source. Examples:
 
 ---
 
+## 11. Strap data: what the Helio Strap can reach (research 22 Oct 2026)
+
+**Measured by the strap:** per-second HR, resting HR, overnight HRV, SpO2, stress, skin temperature, sleep stages incl. REM and naps, breathing rate and breathing quality, steps, calories, PAI, BioCharge (needs 7 days), Exertion, VO2 max, training load / effect, recovery time, HR recovery, 50+ sport modes, strength reps/sets/rest with 25 auto-recognised lifts, HYROX mode, real-time Bluetooth HR, 21 days of offline HR storage.
+
+**What reaches Apple Health from Zepp:** steps, sleep (with stages), HR (all day and workouts), workouts, active energy, resting HR, sparse HRV (2–4 points a night; Zepp's value is RMSSD stored in HealthKit's SDNN field). Blood oxygen: sources disagree. Respiratory rate: unconfirmed. **Not exported:** stress, temperature, BioCharge / readiness, PAI, VO2 max, Zepp training load.
+
+**Other routes:** Zepp's GDPR export (official, manual). Unofficial reverse-engineered API (zepp-bridge, huami-token, ZeppBridge advanced login): fuller HRV, stress and temperature, but against the terms, token expires ~30 days. Zepp's old developer REST API is deprecated. Strava API: per-second HR streams per workout, single-player mode for personal apps, needs a subscription; a third-party import, so out of scope.
+
+**Reviews:** overnight HRV close to Whoop/Oura; HR zones use a fixed formula; auto workout detection invents sessions; REM unreliable, time awake often zero; sleep score generous. Zepp Coach models load with TRIMP, 42-day CTL and 7-day ATL.
+
+**What CHINH does with it:** TECH_SPEC M7.0–M7.7.
+
+Sources: [Zepp privacy support](https://www.zepp.com/privacy-support) · [zepp-bridge](https://github.com/kikienrico/zepp-bridge) · [ZeppBridge](https://github.com/lingcang728/ZeppBridge) · [Deprecated Zepp platform](https://github.com/zepp-health/rest-api/issues/26) · [Strava getting started](https://developers.strava.com/docs/getting-started/) · [Strava streams](https://strava.github.io/api/v3/streams/)
+
 ## Roadmap
 
 | Version | Adds | Needs |
