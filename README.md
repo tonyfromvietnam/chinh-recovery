@@ -2,7 +2,7 @@
 
 A dark-mode daily recovery dashboard that turns last night's data into directions and an hour-by-hour action plan.
 
-**Live:** https://chinh-recovery.vercel.app/
+**Live:** https://www.duychinhdinh.com/chinh-recovery (on the owner's website; hosted by the `chinh-recovery` Vercel project)
 
 ## The pipeline
 
