@@ -27,8 +27,8 @@ iPhone (Shortcut) ──▶ CHINH ──▶ Supabase "days" table ◀── CHIN
 
 ## 3. Allow sign-in links back to CHINH
 **Authentication → URL Configuration**
-- **Site URL:** `https://chinh-recovery.vercel.app/`
-- **Redirect URLs → Add URL:** `https://chinh-recovery.vercel.app/` (and `http://localhost:5173/` if you run it locally)
+- **Site URL:** `https://www.duychinhdinh.com/chinh-recovery`
+- **Redirect URLs → Add URL:** `https://www.duychinhdinh.com/**` and `https://duychinhdinh.com/**` (plus `https://chinh-recovery.vercel.app/**`, where the app is hosted, and `http://localhost:5173/` if you run it locally)
 
 Email sign-in is on by default, under **Authentication → Sign In / Providers → Email**.
 

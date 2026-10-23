@@ -7,7 +7,7 @@ Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
 
 - `npm run dev` – local server at http://localhost:5173/
 - `npm test` – engine tests in `tests/*.test.js` (node:test, no extra packages)
-- `npm run build` – production build. Hosting is **Vercel**: it deploys every push to `main` and runs `npm test` first (`vercel.json`). GitHub Actions tests and builds every PR. Live: https://chinh-recovery.vercel.app
+- `npm run build` – production build. Hosting is **Vercel**: it deploys every push to `main` and runs `npm test` first (`vercel.json`). GitHub Actions tests and builds every PR. Live: https://www.duychinhdinh.com/chinh-recovery. The owner's website (repo `tonyfromvietnam/website`, Vercel project `website`, domain www.duychinhdinh.com) rewrites `/chinh-recovery` and `/assets/` to this app's Vercel project (https://chinh-recovery.vercel.app), so the app keeps building at the root (`base: "/"`). Links, the Shortcut and Supabase's Site URL use the website address.
 
 ## Architecture
 
