@@ -41,3 +41,9 @@ export async function pushDays(userId, days) {
   const { error } = await supabase.from(TABLE).upsert(rows, { onConflict: "user_id,date" });
   if (error) throw error;
 }
+
+/* One immutable row per scoring (see buildDecision in the engine). Insert-only: decisions are never edited. */
+export async function pushDecision(userId, decision) {
+  const { error } = await supabase.from("decisions").insert({ user_id: userId, date: decision.date, source: decision.source, data: decision });
+  if (error) throw error;
+}

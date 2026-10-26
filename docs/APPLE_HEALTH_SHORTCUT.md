@@ -153,6 +153,24 @@ Each "yesterday" Find uses **Start Date is after** `Yday0` **and Start Date is b
 | Blood oxygen | Backing up a raised resting-HR warning when it's 2+ points under your normal | A warning on its own; a night with a minimum under 88 % is treated as a loose strap |
 | Sleep stages | A bar on the recovery card | The score or directions: wrist staging isn't accurate enough to act on |
 
+## 2d. Sync in the background, no Safari (server, optional)
+
+Once server sync is set up (`docs/SUPABASE_SETUP.md`, section 7), Health Sync can send the link to CHINH's server instead of opening Safari. The server scores the day with the same engine, saves it, keeps a decision record, and answers with one line for a notification. Open CHINH whenever you like: it already has today.
+
+In **Health Sync**, keep everything up to the **Text** action that builds the link, then replace **Open URLs** with:
+
+1. **Get Contents of URL**
+   - URL: `https://chinh-recovery.vercel.app/api/ingest`
+   - Tap **Show More** → **Method**: **POST**
+   - **Headers** → **Add new header**: key `Authorization`, value `Bearer ` followed by your sync token (the `INGEST_TOKEN` from section 7, with one space after `Bearer`)
+   - **Request Body**: **JSON** → **Add new field** → **Text**: key `link`, value the **Text** variable (the link)
+2. **Get Dictionary Value** → **Value** for key `summary` in **Contents of URL**
+3. **Show Notification** → **Dictionary Value**
+
+Run it once. You should get a notification like *"78% · Balanced flow day · Cap intensity at RPE 7"*. CHINH, if it's open on any device, updates within a second.
+
+If something's wrong, the notification shows the reason instead, e.g. *"Wrong or missing token."* Your token is a password: keep it only in this Shortcut, and don't share the Shortcut with it inside.
+
 ## 3. What happens when it runs
 
 CHINH opens, saves today's check-in and shows the plan. **There is no form to fill in.** Soreness, ankle/hip stiffness and mental energy carry over from the last time you rated them, and a banner says which day they're from.
@@ -247,6 +265,8 @@ It takes 10–30 seconds. CHINH shows **"Imported 30 days from Apple Health (N w
 | No "Start Date … hours" option | Use **1 day**. A daytime nap the day before then counts towards sleep; adjust the hours with Update check-in on those days. |
 | BackFill rows start with `12:00` or all show today's date | The date chip in the row Text is formatting the time, or a date that doesn't change each loop. Use the **WindowEnd** variable in the row (step 10). |
 | BackFill sleep empty in every row | Get Details under the sleep Find is reading the wrong input. Delete it and add it again directly under the Find. |
+| Notification says "Wrong or missing token" | The header must read `Bearer <token>`: the word Bearer, one space, then exactly the `INGEST_TOKEN` set in Vercel. |
+| Notification says "Server sync isn't set up yet" | Vercel is missing one of the four environment variables, or the project hasn't been redeployed since you added them (section 7 of `SUPABASE_SETUP.md`). |
 | BackFill runs but nothing imports | Missing **URL Encode** (step 14), or the large-data setting is off. |
 | Test without the Shortcut | Open `https://www.duychinhdinh.com/chinh-recovery#hrv=58&rhr=54&sleep=7.4`. |
 
