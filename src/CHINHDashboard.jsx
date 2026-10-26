@@ -10,9 +10,10 @@ import {
 import {
   planDay, parseSyncHash, parseBackfillHash, mergeBackfill, upsertDay, dateKey, weeklyReview,
   getArchetype, MOBILITY_DAY_MIN_DRILLS, mergeHistories, changedDays, latestRatings,
-  learnProfile, applyYesterday, applyWorkoutLog, markExtraDone, exerciseById,
+  learnProfile, applyWorkoutLog, markExtraDone, exerciseById,
+  DEFAULT_CHECKIN, overnightOf, checkinDay, ingestSync, buildDecision,
 } from "./engine.js";
-import { supabase, pullDays, pushDays, pullProfile, pushProfile } from "./supabase.js";
+import { supabase, pullDays, pushDays, pullProfile, pushProfile, pushDecision } from "./supabase.js";
 import { Card, Eyebrow, MiniRing, Checkbox, Chips } from "./components/ui.jsx";
 import BriefCard, { BriefSetupCard } from "./components/BriefCard.jsx";
 import SettingsModal from "./components/SettingsModal.jsx";
@@ -28,18 +29,11 @@ const KEYS = {
   profile: "chinh-profile",
 };
 /* Overnight strap readings (M7.3/7.4) live on today's record, never in the carried-over check-in */
-const OVERNIGHT_KEYS = ["spo2", "spo2Min", "stages"];
-const overnightOf = (day) => Object.fromEntries(OVERNIGHT_KEYS.filter((k) => day?.[k] != null).map((k) => [k, day[k]]));
 const load = (k, fallback) => { try { return JSON.parse(localStorage.getItem(k)) ?? fallback; } catch { return fallback; } };
 const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* storage unavailable */ } };
 
 const shortDay = (key) => new Date(`${key}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 
-/* Example values shown until your first check-in */
-const DEFAULT_CHECKIN = {
-  sleepHours: 7.2, sleepQuality: 7, hrv: 62, hrvBaseline: 66, rhr: 55, rhrBaseline: 54,
-  upper: 2, lower: 3, ankleHip: 3, energy: 4,
-};
 const EXAMPLE_TREND = [74, 83, 46, 58, 81, 69];
 
 /* =========================================================================
@@ -764,19 +758,19 @@ export default function CHINHDashboard() {
   };
   useEffect(() => { if (profile) save(KEYS.profile, profile); }, [profile]);
 
+  // Every scoring is kept as a decision record (inputs, baselines, parts, directions) when signed in
+  const logDecision = (plan, used, now) => {
+    if (!supabase || !session) return;
+    pushDecision(session.user.id, buildDecision({ plan, checkin: used, today, source: "app", now })).catch(() => { /* the day itself still syncs */ });
+  };
+
   /* Save today's check-in. `extra` holds per-day fields (override) that must not carry over. */
   const commitCheckin = (next, extra = {}) => {
-    const override = "override" in extra ? extra.override : todayDay?.override ?? null;
-    const nextDay = planDay({ checkin: { ...next, ...overnightOf(todayDay), ...overnightOf(extra), override }, history, today, profile: fullProfile });
+    const now = Date.now();
+    const { plan, entry } = checkinDay({ next, extra, history, today, profile: fullProfile, now });
     setCheckin(next);
-    const fields = {
-      date: today, hrv: next.hrv, rhr: next.rhr, sleepHours: next.sleepHours, sleepQuality: next.sleepQuality,
-      upper: next.upper, lower: next.lower, ankleHip: next.ankleHip, energy: next.energy, score: nextDay.result.score,
-      hrvCount: next.hrvCount, hrvWindow: next.hrvWindow, bedTime: next.bedTime, wakeTime: next.wakeTime,
-      ratedOn: next.ratedOn, sleepQualityRatedOn: next.sleepQualityRatedOn,
-      confidence: nextDay.confidence.level, directives: nextDay.directives.map((d) => d.id), updatedAt: Date.now(), ...extra,
-    };
-    setHistory((h) => upsertDay(h, Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined))));
+    setHistory((h) => upsertDay(h, entry));
+    logDecision(plan, { ...next, ...extra }, now);
   };
 
   // Apple Health links from the Shortcuts:
@@ -802,11 +796,14 @@ export default function CHINHDashboard() {
     const sync = { date: today, at: new Date().toISOString(), fields: [...Object.keys(measures), ...Object.keys(yesterday || {}), ...Object.keys(overnight || {})] };
     setLastSync(sync);
     save(KEYS.sync, sync);
-    // Yesterday's heart-rate zones, steps and active energy go on yesterday's record (M7.1/7.2)
-    if (yesterday) setHistory((h) => applyYesterday(h, today, yesterday, profile));
-    // No form: check in straight away and carry over the last soreness and energy ratings.
-    const next = { ...checkin, ...measures };
-    commitCheckin(next, overnight || {});
+    // Same steps as the server (api/ingest.js): yesterday's strap data onto yesterday, today scored with
+    // the carried-over soreness and energy ratings. No form.
+    const now = Date.now();
+    const out = ingestSync({ history, checkin, synced, today, profile, now });
+    const next = out.checkin;
+    setCheckin(next);
+    setHistory(out.history);
+    logDecision(out.plan, { ...next, ...(overnight || {}) }, now);
     const parts = [
       measures.hrv != null && `HRV ${measures.hrv} ms${measures.hrvCount != null ? ` (${measures.hrvCount} readings)` : ""}`,
       measures.rhr != null && `RHR ${measures.rhr} bpm`,
@@ -955,7 +952,14 @@ export default function CHINHDashboard() {
   const now = new Date();
   const longDate = now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const shortDate = now.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-  const syncedToday = lastSync?.date === today;
+  // Today's Apple Health sync: this device's own, or one the server took in from the Shortcut (day.syncedAt)
+  const healthSync = (() => {
+    const local = lastSync?.date === today ? lastSync : null;
+    const at = todayDay?.syncedAt;
+    if (!Number.isFinite(at) || (local && Date.parse(local.at) >= at)) return local;
+    return { date: today, at: new Date(at).toISOString(), fields: ["hrv", "rhr", "sleepHours"].filter((k) => todayDay[k] != null) };
+  })();
+  const syncedToday = !!healthSync;
   const checkedInToday = history.some((h) => h.date === today && Number.isFinite(h.score));
   const hasCheckins = history.some((h) => Number.isFinite(h.score));
 
@@ -984,7 +988,7 @@ export default function CHINHDashboard() {
             <span className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-[11px] ${syncedToday ? "bg-emerald-400/10 text-emerald-300" : "bg-white/5 text-slate-400"}`}>
               <RefreshCw size={12} />
               {syncedToday
-                ? `Apple Health · ${new Date(lastSync.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
+                ? `Apple Health · ${new Date(healthSync.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
                 : "Not synced today"}
             </span>
             <button onClick={() => setSettingsOpen(true)} aria-label="Settings"
@@ -1074,7 +1078,7 @@ export default function CHINHDashboard() {
         <SyncModal session={session} cloud={cloud} onClose={() => setSyncOpen(false)} onSyncNow={pull} onSignOut={signOut} />
       )}
       {modalOpen && (
-        <CheckInModal initial={dayCheckin} synced={syncedToday ? lastSync : null} history={history} today={today} profile={fullProfile}
+        <CheckInModal initial={dayCheckin} synced={healthSync} history={history} today={today} profile={fullProfile}
           onClose={() => setModalOpen(false)} onSubmit={handleSubmit} />
       )}
       {settingsOpen && (
