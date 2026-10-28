@@ -2,7 +2,7 @@
    and the 30-second log: each exercise pre-filled with its target, tick it, change a number if it differs,
    and say how the last set felt. */
 import React, { useState } from "react";
-import { Dumbbell, Zap, Timer, Info, ClipboardCheck, Check, ArrowUp, ArrowDown } from "lucide-react";
+import { Dumbbell, Zap, Timer, Info, ClipboardCheck, Check, ArrowUp, ArrowDown, Sparkles, RefreshCw } from "lucide-react";
 import { Card, CardHeader, Chips, Checkbox, PrimaryButton, GhostButton } from "./ui.jsx";
 import { formatDose, exerciseById } from "../engine.js";
 
@@ -21,7 +21,9 @@ function ExerciseRow({ e }) {
         {e.extra > 0 && <span className="ml-1.5 font-mono text-[10px] text-slate-400">+{e.extra} band/weight</span>}
         {c && <span className={`ml-1.5 inline-flex items-center gap-0.5 rounded px-1 font-mono text-[10px] ${c.tone}`}><c.icon size={10} />{c.text}</span>}
       </span>
-      <span className="shrink-0 font-mono text-xs tabular-nums text-cyan-200/80">{formatDose(exerciseById(e.id), e.sets)}</span>
+      <span className="shrink-0 font-mono text-xs tabular-nums text-cyan-200/80">{e.reps[0] === e.reps[1] // one target (AI sessions and fixed power doses)
+        ?`${e.sets} × ${e.reps[0]}${e.unit === "s" ? " s" : ""}${e.side ? " / side" : ""}`
+        : formatDose(exerciseById(e.id), e.sets)}</span>
     </li>
   );
 }
@@ -82,7 +84,28 @@ function LogForm({ session, logged, onSave, onCancel }) {
   );
 }
 
-export default function TrainingCard({ session, logged = null, onSaveLog, onOpenSettings }) {
+/* M8.4 — the AI trainer's button and status. Only shown when signed in (the server checks it's the owner). */
+function CoachBar({ coach, aiSession }) {
+  if (!coach?.available) return null;
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-violet-300/15 bg-violet-300/[0.04] px-3 py-2">
+      <p className="flex min-w-0 items-center gap-1.5 text-xs text-slate-300">
+        <Sparkles size={14} className="shrink-0 text-violet-200" />
+        {coach.busy ? "The AI trainer is picking today's exercises…"
+          : coach.note ? coach.note
+          : aiSession ? "AI trainer's pick, within today's limits."
+          : "Standard session. Ask the AI trainer to tailor it to your logs."}
+      </p>
+      <button type="button" disabled={coach.busy} onClick={() => coach.onAsk(coach.hasPlan ? "regenerate" : "plan")}
+        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-violet-300/30 px-3 text-xs font-medium text-violet-100 hover:bg-violet-300/10 disabled:opacity-50">
+        {coach.hasPlan ? <RefreshCw size={13} className={coach.busy ? "animate-spin" : ""} /> : <Sparkles size={13} />}
+        {coach.hasPlan ? "New plan" : "AI plan"}
+      </button>
+    </div>
+  );
+}
+
+export default function TrainingCard({ session, logged = null, onSaveLog, onOpenSettings, coach = null }) {
   const [logging, setLogging] = useState(false);
   if (session.recovery) {
     return (
@@ -99,6 +122,8 @@ export default function TrainingCard({ session, logged = null, onSaveLog, onOpen
         sub={`Supersets: do the pair back to back, rest ${session.blocks[0]?.restSec ?? 60} s, repeat. Effort: ${effort}.`}
         right={<button onClick={onOpenSettings} className="font-mono text-[11px] text-slate-400 underline-offset-2 hover:text-slate-200 hover:underline">
           {session.sessionMinutes}-min plan · kit</button>} />
+
+      {!logging && <CoachBar coach={coach} aiSession={session.source === "ai"} />}
 
       {logging ? (
         <LogForm session={session} logged={logged} onCancel={() => setLogging(false)}

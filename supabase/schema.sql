@@ -83,3 +83,43 @@ create policy "Read own decisions" on public.decisions
 drop policy if exists "Add own decisions" on public.decisions;
 create policy "Add own decisions" on public.decisions
   for insert to authenticated with check ((select auth.uid()) = user_id);
+
+-- AI trainer (M8.4): one plan a day plus 3 regenerations, counted per user per London day.
+-- Users can read their own counts; the only way to add to them is claim_coach_request below.
+create table if not exists public.coach_usage (
+  user_id       uuid    not null default auth.uid() references auth.users (id) on delete cascade,
+  date          date    not null,
+  plans         integer not null default 0,
+  regenerations integer not null default 0,
+  primary key (user_id, date)
+);
+
+alter table public.coach_usage enable row level security;
+
+drop policy if exists "Read own coach usage" on public.coach_usage;
+create policy "Read own coach usage" on public.coach_usage
+  for select to authenticated using ((select auth.uid()) = user_id);
+
+-- Atomically claims one of today's requests for the signed-in user. Returns false once the limit is reached,
+-- so api/coach.js can refuse before calling Claude. security definer: it can write the row RLS keeps read-only.
+create or replace function public.claim_coach_request(kind text) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid := auth.uid();
+  today date := (now() at time zone 'Europe/London')::date;
+  claimed boolean;
+begin
+  if uid is null or kind not in ('plan', 'regenerate') then return false; end if;
+  insert into public.coach_usage (user_id, date) values (uid, today) on conflict do nothing;
+  if kind = 'plan' then
+    update public.coach_usage set plans = plans + 1
+      where user_id = uid and date = today and plans < 1 returning true into claimed;
+  else
+    update public.coach_usage set regenerations = regenerations + 1
+      where user_id = uid and date = today and regenerations < 3 returning true into claimed;
+  end if;
+  return coalesce(claimed, false);
+end $$;
+
+revoke all on function public.claim_coach_request(text) from public, anon;
+grant execute on function public.claim_coach_request(text) to authenticated;

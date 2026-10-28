@@ -71,6 +71,34 @@ This lets the morning Shortcut send its numbers straight to CHINH's server (`api
 
 **Check it:** run Health Sync. You get a notification with today's score, and a new row appears in both **days** (today) and **decisions**. To see why CHINH decided something on any day: **Table Editor → decisions**, filter `date`, and open `data`.
 
+## 8. AI trainer (optional, about 5 min)
+
+The **New plan** button on the training card asks Claude to pick today's exercises (`api/coach.js`). It only chooses *what* to do: the engine still sets how hard, and every AI session must pass CHINH's checks or you get the standard session. Only a summary goes to Claude (today's archetype, directions with their numbers, rungs, recent logs, ankle ratings), never your name, email or raw history. It costs a few pence a request on your Anthropic account, and it's limited to one plan a day plus 3 new plans.
+
+1. **Run the latest `supabase/schema.sql`** again. It adds the `coach_usage` table and the `claim_coach_request` function that counts today's requests.
+2. **Make sure sign-ups are off** (step 6), so nobody else can get a sign-in.
+3. **Create an API key** at console.anthropic.com → **API Keys**. Set a monthly spend limit there too.
+4. **Vercel → project `chinh-recovery` → Settings → Environment Variables**, for **Production**:
+
+   | Name | Value |
+   |---|---|
+   | `ANTHROPIC_API_KEY` | the key from step 3 |
+   | `OWNER_EMAIL` | the email you sign in to CHINH with; anyone else gets "for the owner only" |
+   | `COACH_MODEL` | optional; defaults to `claude-opus-5-5` |
+   | `SUPABASE_ANON_KEY` | skip it if `VITE_SUPABASE_ANON_KEY` is already there |
+
+5. **Redeploy**, sign in to CHINH and press **AI plan** on a strength day.
+
+## 9. Live stats on www.duychinhdinh.com (optional)
+
+`api/stats.js` gives the website a public summary: the latest recovery score and day type, the 30 daily scores, and HRV, resting HR and sleep as 7-day averages (never a single day's reading, ratings, directions or why a day was off). It reuses the section 7 variables and stays off until you add, in Vercel → `chinh-recovery` → Environment Variables:
+
+| Name | Value |
+|---|---|
+| `PUBLIC_STATS` | `on` (remove it to take the numbers off the website again) |
+
+Redeploy. Check https://chinh-recovery.vercel.app/api/stats shows the summary; the homepage picks it up within about 15 minutes.
+
 ## How clashes are settled
 Each day carries the time it was last changed. If phone and desktop both changed the same day, the newer change wins, and fields only one side has are kept. A real check-in always beats a backfilled day. Signing out keeps the copy on that device.
 

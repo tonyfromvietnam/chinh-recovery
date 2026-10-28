@@ -12,7 +12,11 @@ import {
   getArchetype, MOBILITY_DAY_MIN_DRILLS, mergeHistories, changedDays, latestRatings,
   learnProfile, applyWorkoutLog, markExtraDone, exerciseById,
   DEFAULT_CHECKIN, overnightOf, checkinDay, ingestSync, buildDecision,
+  coachInput, coachConstraints, validateSession, sessionFromCoach,
 } from "./engine.js";
+
+// The app is served both at chinh-recovery.vercel.app and under www.duychinhdinh.com/chinh-recovery
+const API_BASE = typeof location !== "undefined" && location.pathname.startsWith("/chinh-recovery") ? "/chinh-recovery/api" : "/api";
 import { supabase, pullDays, pushDays, pullProfile, pushProfile, pushDecision } from "./supabase.js";
 import { Card, Eyebrow, MiniRing, Checkbox, Chips } from "./components/ui.jsx";
 import BriefCard, { BriefSetupCard } from "./components/BriefCard.jsx";
@@ -747,6 +751,38 @@ export default function CHINHDashboard() {
     [dayCheckin, history, today, fullProfile]);
   const { result, archetype, baselines, directives, schedule, drills } = day;
 
+  // ---- AI trainer (M8.4): today's AI plan lives on the day record and is re-checked on every render,
+  // so a change later in the day (e.g. an ankle flare) puts the standard session back automatically
+  const [coachState, setCoachState] = useState({ busy: false, note: null });
+  const coached = useMemo(() => {
+    const ai = todayDay?.coach?.session;
+    if (!day.session || day.session.recovery || !ai) return { session: day.session, failed: false };
+    const check = validateSession(ai, coachConstraints({ session: day.session, history, today }));
+    return check.ok ? { session: sessionFromCoach(ai, day.session), failed: false } : { session: day.session, failed: true };
+  }, [day.session, todayDay, history, today]);
+
+  const askCoach = async (kind) => {
+    if (!session || coachState.busy) return;
+    const input = coachInput({ plan: day, history, profile: fullProfile, today });
+    const constraints = coachConstraints({ session: day.session, history, today });
+    if (!input || !constraints) return;
+    setCoachState({ busy: true, note: null });
+    try {
+      const res = await fetch(`${API_BASE}/coach`, {
+        method: "POST",
+        headers: { "content-type": "application/json", authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ kind, input, constraints }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) return setCoachState({ busy: false, note: json.error || "The AI trainer couldn't run. Showing the standard session." });
+      if (!json.ok) return setCoachState({ busy: false, note: "Standard session: the AI plan didn't pass the checks." });
+      setHistory((h) => upsertDay(h, { date: today, coach: { session: json.session, model: json.model, at: Date.now() }, updatedAt: Date.now() }));
+      setCoachState({ busy: false, note: null });
+    } catch {
+      setCoachState({ busy: false, note: "Couldn't reach the AI trainer. Showing the standard session." });
+    }
+  };
+
   const [notice, setNotice] = useState(null);
 
   const setProfile = (p) => {
@@ -1048,8 +1084,11 @@ export default function CHINHDashboard() {
 
         {day.session && (
           <div className="mt-4">
-            <TrainingCard session={day.session} logged={todayDay?.workout ?? null} onOpenSettings={() => setSettingsOpen(true)}
-              onSaveLog={(w) => setHistory((h) => applyWorkoutLog(h, today, w))} />
+            <TrainingCard session={coached.session} logged={todayDay?.workout ?? null} onOpenSettings={() => setSettingsOpen(true)}
+              onSaveLog={(w) => setHistory((h) => applyWorkoutLog(h, today, w))}
+              coach={{ available: !!session, hasPlan: !!todayDay?.coach, busy: coachState.busy,
+                note: coachState.note ?? (coached.failed ? "Standard session: the AI plan didn't pass the checks." : null),
+                onAsk: askCoach }} />
           </div>
         )}
 
