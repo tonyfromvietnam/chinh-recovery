@@ -1,7 +1,7 @@
 # CHINH – notes for Claude Code
 
 Personal recovery dashboard: morning data → recovery score → directions → hour-by-hour plan.
-Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
+Looks like the owner's homepage (www.duychinhdinh.com): four colour themes (Sand by default, Linen, Espresso, Night), Geist and Geist Mono, sharp 6 px tiles with hairline edges. British English in all copy.
 
 ## Commands
 
@@ -51,6 +51,8 @@ Dark athletic UI inspired by WHOOP and Bevel. British English in all copy.
 - Personal training context lives in `CLAUDE.local.md` (git-ignored, on the owner's machine only).
 
 ## Conventions
+
+- **Theme:** colours come from the active theme, shared with the homepage (same `theme` storage key, same domain). Tailwind's colour names keep their roles and each theme sets their values in `src/index.css` (slate-100 = main text, slate-950 = page, white = overlay tint, cyan = accent, emerald / amber / rose = high / balanced / restore). Colours set in code (charts, rings, status) must go through `tone()` from `src/theme.js`, which maps the original palette to the active theme; module-level colour tables use getters so they're read at render time. Cards use the `chinh-tile` class.
 
 - React + Tailwind + lucide-react + Recharts. Small components, no new dependencies without a reason.
 - Public repo: never commit personal health data. Exports go in `data/` (git-ignored).

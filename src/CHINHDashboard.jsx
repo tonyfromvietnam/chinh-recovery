@@ -17,6 +17,7 @@ import {
 
 // The app is served both at chinh-recovery.vercel.app and under www.duychinhdinh.com/chinh-recovery
 const API_BASE = typeof location !== "undefined" && location.pathname.startsWith("/chinh-recovery") ? "/chinh-recovery/api" : "/api";
+import { tone } from "./theme.js";
 import { supabase, pullDays, pushDays, pullProfile, pushProfile, pushDecision } from "./supabase.js";
 import { Card, Eyebrow, MiniRing, Checkbox, Chips } from "./components/ui.jsx";
 import BriefCard, { BriefSetupCard } from "./components/BriefCard.jsx";
@@ -24,6 +25,7 @@ import SettingsModal from "./components/SettingsModal.jsx";
 import InsightsCard from "./components/InsightsCard.jsx";
 import HrLoadCard from "./components/HrLoadCard.jsx";
 import TrainingCard from "./components/TrainingCard.jsx";
+import ThemeSwitch from "./components/ThemeSwitch.jsx";
 
 /* =========================================================================
    Storage (on this device only — wrapped so private mode never crashes)
@@ -44,22 +46,22 @@ const EXAMPLE_TREND = [74, 83, 46, 58, 81, 69];
    UI building blocks
    ========================================================================= */
 const TYPE_META = {
-  sun: { icon: Sun, color: "#fbbf24" },
-  mobility: { icon: Footprints, color: "#22d3ee" },
-  focus: { icon: Brain, color: "#a78bfa" },
-  work: { icon: ClipboardCheck, color: "#94a3b8" },
-  breath: { icon: Wind, color: "#5eead4" },
-  training: { icon: Dumbbell, color: "#22e58b" },
-  errands: { icon: ShoppingCart, color: "#f97316" },
-  fuel: { icon: Utensils, color: "#fda4af" },
-  study: { icon: BookOpen, color: "#a78bfa" },
-  wind: { icon: BedDouble, color: "#818cf8" },
+  sun: { icon: Sun, get color() { return tone("#fbbf24"); } },
+  mobility: { icon: Footprints, get color() { return tone("#22d3ee"); } },
+  focus: { icon: Brain, get color() { return tone("#a78bfa"); } },
+  work: { icon: ClipboardCheck, get color() { return tone("#94a3b8"); } },
+  breath: { icon: Wind, get color() { return tone("#5eead4"); } },
+  training: { icon: Dumbbell, get color() { return tone("#22e58b"); } },
+  errands: { icon: ShoppingCart, get color() { return tone("#f97316"); } },
+  fuel: { icon: Utensils, get color() { return tone("#fda4af"); } },
+  study: { icon: BookOpen, get color() { return tone("#a78bfa"); } },
+  wind: { icon: BedDouble, get color() { return tone("#818cf8"); } },
 };
 const PART_ICON = { sleep: Moon, autonomic: HeartPulse, soreness: Activity, mental: Brain };
 const LEVEL_META = {
-  stop: { icon: AlertOctagon, color: "#fb5a6e", label: "Stop" },
-  adjust: { icon: SlidersHorizontal, color: "#facc15", label: "Adjust" },
-  go: { icon: CheckCircle2, color: "#22e58b", label: "Go" },
+  stop: { icon: AlertOctagon, get color() { return tone("#fb5a6e"); }, label: "Stop" },
+  adjust: { icon: SlidersHorizontal, get color() { return tone("#facc15"); }, label: "Adjust" },
+  go: { icon: CheckCircle2, get color() { return tone("#22e58b"); }, label: "Go" },
 };
 
 function ScoreRing({ score, color, size = 220 }) {
@@ -83,7 +85,7 @@ function ScoreRing({ score, color, size = 220 }) {
 /* =========================================================================
    Panels
    ========================================================================= */
-const CONFIDENCE_TONE = { high: "#22e58b", medium: "#facc15", low: "#fb5a6e" };
+const CONFIDENCE_TONE = { get high() { return tone("#22e58b"); }, get medium() { return tone("#facc15"); }, get low() { return tone("#fb5a6e"); } };
 
 function ConfidenceBadge({ confidence }) {
   const color = CONFIDENCE_TONE[confidence.level];
@@ -98,7 +100,7 @@ function ConfidenceBadge({ confidence }) {
   );
 }
 
-const STAGE_COLOR = { deep: "#6366f1", core: "#38bdf8", rem: "#a78bfa" };
+const STAGE_COLOR = { get deep() { return tone("#6366f1"); }, get core() { return tone("#38bdf8"); }, get rem() { return tone("#a78bfa"); } };
 const hm = (min) => `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, "0")} m`;
 
 /* M7.4 — display only: consumer sleep staging isn't accurate enough to score or act on */
@@ -135,9 +137,9 @@ function RecoveryCard({ result, archetype, baselines, dateLabel, confidence, bas
         </div>
       </div>
       <div className="mt-4 flex flex-col items-center gap-5">
-        <ScoreRing score={result.score} color={archetype.color} />
+        <ScoreRing score={result.score} color={tone(archetype.color)} />
         <div className="rounded-full border px-4 py-1.5 font-display text-lg font-semibold tracking-[0.08em]"
-          style={{ color: archetype.color, borderColor: `${archetype.color}55`, background: archetype.tint }}>
+          style={{ color: tone(archetype.color), borderColor: `${tone(archetype.color)}55`, background: `${tone(archetype.color)}1f` }}>
           {archetype.label}
         </div>
         <p className="max-w-xs text-center text-sm text-slate-300">{archetype.summary}</p>
@@ -154,7 +156,7 @@ function RecoveryCard({ result, archetype, baselines, dateLabel, confidence, bas
                   <span className="font-mono text-slate-500">{p.weight}%</span>
                 </div>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-700/50">
-                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${p.value * 100}%`, background: archetype.color }} />
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${p.value * 100}%`, background: tone(archetype.color) }} />
                 </div>
               </div>
               <span className="w-12 text-right font-mono text-sm tabular-nums text-slate-200">{p.points.toFixed(1)}</span>
@@ -242,18 +244,18 @@ function TrendCard({ data, isExample }) {
           <AreaChart data={data} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
             <defs>
               <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
+                <stop offset="0%" stopColor={tone("#22d3ee")} stopOpacity={0.35} />
+                <stop offset="100%" stopColor={tone("#22d3ee")} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <XAxis dataKey="day" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <YAxis domain={[0, 100]} ticks={[0, 50, 80, 100]} tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-            <ReferenceLine y={80} stroke="#22e58b" strokeOpacity={0.35} strokeDasharray="4 4" />
-            <ReferenceLine y={50} stroke="#fb5a6e" strokeOpacity={0.35} strokeDasharray="4 4" />
-            <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontSize: 12 }}
-              labelStyle={{ color: "#94a3b8" }} itemStyle={{ color: "#22d3ee" }} formatter={(v) => [`${v}%`, "Recovery"]} />
-            <Area type="monotone" dataKey="score" stroke="#22d3ee" strokeWidth={2.5} fill="url(#trendFill)"
-              dot={{ r: 3, fill: "#0f172a", stroke: "#22d3ee", strokeWidth: 2 }} activeDot={{ r: 5, fill: "#22d3ee" }} />
+            <XAxis dataKey="day" tick={{ fill: tone("#64748b"), fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis domain={[0, 100]} ticks={[0, 50, 80, 100]} tick={{ fill: tone("#64748b"), fontSize: 11 }} axisLine={false} tickLine={false} />
+            <ReferenceLine y={80} stroke={tone("#22e58b")} strokeOpacity={0.35} strokeDasharray="4 4" />
+            <ReferenceLine y={50} stroke={tone("#fb5a6e")} strokeOpacity={0.35} strokeDasharray="4 4" />
+            <Tooltip contentStyle={{ background: tone("#0f172a"), border: `1px solid ${tone("rgba(255,255,255,0.1)")}`, borderRadius: 10, fontSize: 12 }}
+              labelStyle={{ color: tone("#94a3b8") }} itemStyle={{ color: tone("#22d3ee") }} formatter={(v) => [`${v}%`, "Recovery"]} />
+            <Area type="monotone" dataKey="score" stroke={tone("#22d3ee")} strokeWidth={2.5} fill="url(#trendFill)"
+              dot={{ r: 3, fill: tone("#0f172a"), stroke: tone("#22d3ee"), strokeWidth: 2 }} activeDot={{ r: 5, fill: tone("#22d3ee") }} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -329,7 +331,7 @@ function ScheduleTimeline({ items, done, toggle, accent }) {
           return (
             <li key={item.id} className="relative grid grid-cols-[52px_32px_1fr] items-start gap-2 py-2.5">
               <span className={`pt-1 font-mono text-sm tabular-nums ${isDone ? "text-slate-600" : "text-slate-300"}`}>{item.time}</span>
-              <span className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full border" style={{ borderColor: `${meta.color}55`, background: "#0f172a" }}>
+              <span className="relative z-10 flex h-8 w-8 items-center justify-center rounded-full border" style={{ borderColor: `${meta.color}55`, background: tone("#0f172a") }}>
                 <Icon size={15} color={meta.color} />
               </span>
               <div className={`flex min-w-0 items-start gap-3 rounded-xl px-3 py-2 transition ${isDone ? "" : "bg-white/[0.03] hover:bg-white/[0.06]"}`}>
@@ -352,7 +354,7 @@ function ScheduleTimeline({ items, done, toggle, accent }) {
 
 function MobilityPanel({ drills, done, toggle }) {
   const completed = drills.filter((d) => done[d.id]).length;
-  const prColor = { High: "#fb5a6e", Medium: "#facc15", Maintain: "#22d3ee" };
+  const prColor = { High: tone("#fb5a6e"), Medium: tone("#facc15"), Maintain: tone("#22d3ee") };
   return (
     <Card className="p-5 sm:p-6">
       <div className="flex items-start justify-between gap-3">
@@ -371,7 +373,7 @@ function MobilityPanel({ drills, done, toggle }) {
           const isDone = !!done[d.id];
           return (
             <li key={d.id} className="flex items-start gap-3 rounded-xl border border-white/[0.05] bg-slate-900/40 p-3">
-              <Checkbox checked={isDone} onChange={() => toggle(d.id)} color="#22d3ee" label={`Mark ${d.name} done`} />
+              <Checkbox checked={isDone} onChange={() => toggle(d.id)} color={tone("#22d3ee")} label={`Mark ${d.name} done`} />
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <p className={`text-sm font-medium ${isDone ? "text-slate-500 line-through" : "text-slate-100"}`}>{d.name}</p>
@@ -396,7 +398,7 @@ function WeeklyReviewCard({ review }) {
     { id: "high", label: "High", n: days.high },
     { id: "balanced", label: "Balanced", n: days.balanced },
     { id: "restore", label: "Restore", n: days.restore },
-  ].map((m) => ({ ...m, color: getArchetype(m.id === "high" ? 80 : m.id === "balanced" ? 50 : 0).color }));
+  ].map((m) => ({ ...m, color: tone(getArchetype(m.id === "high" ? 80 : m.id === "balanced" ? 50 : 0).color) }));
   const tiles = [
     { label: "HRV", value: hrv.avg ?? "–", unit: "ms", sub: hrv.pct != null ? `${hrv.pct}% of your ${hrv.baseline} ms normal` : "No baseline yet", icon: HeartPulse },
     { label: "Resting HR", value: rhr.avg ?? "–", unit: "bpm", sub: rhr.delta != null ? `${sign(rhr.delta)} vs ${rhr.baseline} bpm normal` : "No baseline yet", icon: Activity },
@@ -453,14 +455,14 @@ function WeeklyReviewCard({ review }) {
             {adherence.days > 0 && (
               <div className="flex items-center gap-5">
                 <div className="flex items-center gap-2">
-                  <MiniRing pct={(adherence.planPct ?? 0) / 100} color="#22e58b" />
+                  <MiniRing pct={(adherence.planPct ?? 0) / 100} color={tone("#22e58b")} />
                   <div>
                     <p className="font-display text-xl font-semibold tabular-nums text-slate-100">{adherence.planPct}%</p>
                     <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400">plan done</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <MiniRing pct={adherence.mobilityDays / adherence.days} color="#22d3ee" />
+                  <MiniRing pct={adherence.mobilityDays / adherence.days} color={tone("#22d3ee")} />
                   <div>
                     <p className="font-display text-xl font-semibold tabular-nums text-slate-100">{adherence.mobilityDays}/{adherence.days}</p>
                     <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-slate-400" title={`${MOBILITY_DAY_MIN_DRILLS}+ drills ticked`}>mobility days</p>
@@ -592,7 +594,7 @@ function SyncModal({ session, cloud, onClose, onSyncNow, onSignOut }) {
                 placeholder="you@example.com" className="w-full bg-transparent py-2.5 text-slate-100 outline-none" />
             </div>
             {error && <p className="font-mono text-xs text-rose-300">{error}</p>}
-            <button type="submit" className="w-full rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-400 py-3 font-semibold text-slate-950 hover:brightness-110">
+            <button type="submit" className="w-full rounded-lg bg-cyan-400 py-3 font-semibold text-slate-950 transition hover:-translate-y-px hover:brightness-110">
               Email me a sign-in link
             </button>
           </form>
@@ -706,12 +708,12 @@ function CheckInModal({ initial, synced, history, today, profile, onClose, onSub
         <div className="mt-7 flex items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-slate-950/50 p-4">
           <div>
             <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-slate-500">Live preview</p>
-            <p className="font-display text-lg font-semibold tracking-wide" style={{ color: arch.color }}>{arch.label}</p>
+            <p className="font-display text-lg font-semibold tracking-wide" style={{ color: tone(arch.color) }}>{arch.label}</p>
           </div>
-          <span className="font-display text-4xl font-bold tabular-nums" style={{ color: arch.color }}>{preview.result.score}%</span>
+          <span className="font-display text-4xl font-bold tabular-nums" style={{ color: tone(arch.color) }}>{preview.result.score}%</span>
         </div>
         <button onClick={() => onSubmit(f)}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-400 py-3.5 font-semibold text-slate-950 shadow-[0_0_30px_-6px_rgba(34,211,238,0.6)] transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-white">
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-400 py-3.5 font-semibold text-slate-950 shadow-[0_8px_24px_-12px_rgb(var(--cyan-400))] transition hover:-translate-y-px hover:brightness-110 focus-visible:ring-2 focus-visible:ring-cyan-300">
           <Zap size={18} /> Calculate & Generate Today's Plan
         </button>
       </div>
@@ -741,6 +743,13 @@ export default function CHINHDashboard() {
   const [cloud, setCloud] = useState({ state: supabase ? "idle" : "off" });
   const syncedRef = useRef(null); // date → JSON of each day as the cloud last confirmed it
   const profileSyncedRef = useRef(null); // JSON of the profile as the cloud last confirmed it
+
+  const [, setThemeTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setThemeTick((n) => n + 1);
+    window.addEventListener("themechange", bump);
+    return () => window.removeEventListener("themechange", bump);
+  }, []);
 
   const todayDay = useMemo(() => history.find((h) => h.date === today) || null, [history, today]);
   const learned = useMemo(() => learnProfile(history, today), [history, today]);
@@ -1002,17 +1011,13 @@ export default function CHINHDashboard() {
   const review = useMemo(() => weeklyReview(history, today), [history, today]);
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden="true">
-        <div className="absolute -left-40 -top-40 h-[480px] w-[480px] rounded-full opacity-25 blur-[120px]" style={{ background: archetype.color }} />
-        <div className="absolute -right-40 top-1/3 h-[420px] w-[420px] rounded-full bg-cyan-500 opacity-10 blur-[120px]" />
-      </div>
+    <div className="min-h-screen bg-page text-slate-100">
 
       <div className="chinh-gutter relative mx-auto max-w-6xl py-6 sm:py-10">
         <header className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-400">
-              <Target size={22} color="#0b1220" strokeWidth={2.5} />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-cyan-400">
+              <Target size={22} color={tone("#0b1220")} strokeWidth={2.5} />
             </div>
             <div>
               <h1 className="font-display text-2xl font-bold tracking-[0.12em]">CHINH</h1>
@@ -1020,6 +1025,7 @@ export default function CHINHDashboard() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <ThemeSwitch />
             <SyncChip cloud={cloud} signedIn={!!session} onClick={() => setSyncOpen(true)} />
             <span className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-[11px] ${syncedToday ? "bg-emerald-400/10 text-emerald-300" : "bg-white/5 text-slate-400"}`}>
               <RefreshCw size={12} />
@@ -1093,7 +1099,7 @@ export default function CHINHDashboard() {
         )}
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)]">
-          <ScheduleTimeline items={schedule} done={done} toggle={toggle} accent={archetype.color} />
+          <ScheduleTimeline items={schedule} done={done} toggle={toggle} accent={tone(archetype.color)} />
           <MobilityPanel drills={drills} done={done} toggle={toggle} />
         </div>
 

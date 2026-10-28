@@ -1,5 +1,6 @@
 /* M7.1 — Training load from the strap's heart-rate zones (Edwards TRIMP). Automatic: nothing is logged by hand. */
 import React from "react";
+import { tone } from "../theme.js";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, ReferenceLine } from "recharts";
 import { HeartPulse } from "lucide-react";
 import { Card, CardHeader } from "./ui.jsx";
@@ -27,14 +28,14 @@ export default function HrLoadCard({ load, maxHr }) {
           <div className="mt-3 h-32">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={data} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-                <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} interval={3} />
-                <YAxis tick={{ fill: "#64748b", fontSize: 10 }} axisLine={false} tickLine={false} />
+                <XAxis dataKey="label" tick={{ fill: tone("#64748b"), fontSize: 10 }} axisLine={false} tickLine={false} interval={3} />
+                <YAxis tick={{ fill: tone("#64748b"), fontSize: 10 }} axisLine={false} tickLine={false} />
                 <ReferenceLine y={HR.sessionMin} stroke="rgba(148,163,184,0.35)" strokeDasharray="3 3" />
-                <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} contentStyle={{ background: "#0f172a", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontSize: 12 }}
-                  labelStyle={{ color: "#94a3b8" }} formatter={(v, _, p) => [p.payload.load == null ? "no HR data" : v, "Load"]}
+                <Tooltip cursor={{ fill: "rgba(148,163,184,0.08)" }} contentStyle={{ background: tone("#0f172a"), border: `1px solid ${tone("rgba(255,255,255,0.1)")}`, borderRadius: 10, fontSize: 12 }}
+                  labelStyle={{ color: tone("#94a3b8") }} formatter={(v, _, p) => [p.payload.load == null ? "no HR data" : v, "Load"]}
                   labelFormatter={(_, p) => (p?.[0] ? shortDay(p[0].payload.date) : "")} />
                 <Bar dataKey="value" radius={[3, 3, 0, 0]}>
-                  {data.map((d, i) => <Cell key={d.date} fill={i >= weekStart ? "#f472b6" : "rgba(244,114,182,0.35)"} />)}
+                  {data.map((d, i) => <Cell key={d.date} fill={i >= weekStart ? tone("#f472b6") : `${tone("#f472b6")}59`} />)}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
