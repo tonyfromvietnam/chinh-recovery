@@ -2,25 +2,86 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark;
-  --cyan: #22d3ee;
+/* Four themes, matching www.duychinhdinh.com (Sand is the default). Tailwind's colour names keep their
+   roles (slate-100 = main text, slate-950 = page, white = overlay tint, cyan = accent, emerald / amber /
+   rose = high / balanced / restore) and each theme supplies its own values. */
+:root, :root[data-theme="sand"] {
+  color-scheme: light;
+  --page: 236 228 214; --surface: 246 241 231; --edge: 208 195 173; --white: 29 26 22;
+  --slate-100: 29 26 22; --slate-200: 44 40 34; --slate-300: 74 67 57; --slate-400: 90 82 70; --slate-500: 108 99 85; --slate-600: 138 128 112; --slate-700: 214 202 182; --slate-800: 227 217 199; --slate-900: 237 229 214; --slate-950: 236 228 214;
+  --cyan-100: 127 49 18; --cyan-200: 143 56 20; --cyan-300: 161 64 24; --cyan-400: 180 71 27; --cyan-500: 158 62 23;
+  --emerald-100: 31 90 53; --emerald-200: 37 104 62; --emerald-300: 47 122 74; --emerald-400: 47 122 74;
+  --amber-200: 126 77 9; --amber-300: 143 86 11;
+  --rose-300: 168 46 42; --rose-400: 184 51 47;
+  --violet-100: 79 53 134; --violet-200: 91 62 155; --violet-300: 109 75 179;
 }
+:root[data-theme="linen"] {
+  color-scheme: light;
+  --page: 231 227 215; --surface: 244 241 232; --edge: 203 196 177; --white: 26 28 23;
+  --slate-100: 26 28 23; --slate-200: 42 45 38; --slate-300: 69 74 63; --slate-400: 86 91 79; --slate-500: 102 106 93; --slate-600: 133 138 124; --slate-700: 211 205 189; --slate-800: 223 218 203; --slate-900: 234 230 218; --slate-950: 231 227 215;
+  --cyan-100: 31 74 51; --cyan-200: 36 86 59; --cyan-300: 42 97 67; --cyan-400: 47 107 74; --cyan-500: 40 92 64;
+  --emerald-100: 31 90 53; --emerald-200: 37 104 62; --emerald-300: 47 122 74; --emerald-400: 47 122 74;
+  --amber-200: 122 79 8; --amber-300: 140 90 14;
+  --rose-300: 165 50 41; --rose-400: 176 58 48;
+  --violet-100: 74 56 120; --violet-200: 87 66 142; --violet-300: 102 80 159;
+}
+:root[data-theme="espresso"] {
+  color-scheme: dark;
+  --page: 18 16 13; --surface: 27 23 19; --edge: 53 45 35; --white: 255 240 220;
+  --slate-100: 242 234 220; --slate-200: 228 217 198; --slate-300: 205 194 176; --slate-400: 178 166 145; --slate-500: 157 145 127; --slate-600: 109 99 85; --slate-700: 58 49 40; --slate-800: 42 35 28; --slate-900: 31 26 21; --slate-950: 18 16 13;
+  --cyan-100: 247 234 211; --cyan-200: 240 219 179; --cyan-300: 235 207 159; --cyan-400: 230 195 142; --cyan-500: 212 174 116;
+  --emerald-100: 213 236 223; --emerald-200: 181 220 198; --emerald-300: 143 211 168; --emerald-400: 124 196 150;
+  --amber-200: 246 207 138; --amber-300: 240 184 90;
+  --rose-300: 242 154 140; --rose-400: 239 122 106;
+  --violet-100: 236 226 247; --violet-200: 217 200 239; --violet-300: 196 166 232;
+}
+:root[data-theme="night"] {
+  color-scheme: dark;
+  --page: 7 8 10; --surface: 14 16 19; --edge: 35 39 46; --white: 255 255 255;
+  --slate-100: 244 246 248; --slate-200: 226 230 234; --slate-300: 184 191 199; --slate-400: 154 162 172; --slate-500: 138 146 156; --slate-600: 93 101 111; --slate-700: 42 47 55; --slate-800: 27 31 36; --slate-900: 18 20 24; --slate-950: 7 8 10;
+  --cyan-100: 201 253 230; --cyan-200: 143 247 205; --cyan-300: 95 244 184; --cyan-400: 47 240 160; --cyan-500: 31 216 140;
+  --emerald-100: 201 253 230; --emerald-200: 143 247 205; --emerald-300: 95 244 184; --emerald-400: 47 240 160;
+  --amber-200: 255 224 138; --amber-300: 255 211 77;
+  --rose-300: 255 138 154; --rose-400: 255 92 114;
+  --violet-100: 237 233 254; --violet-200: 221 214 254; --violet-300: 196 181 253;
+}
+
+:root, :root[data-theme="sand"], :root[data-theme="linen"] { --tile-hi: rgba(255, 255, 255, 0.8); --tile-lo: rgba(60, 40, 20, 0.06); }
+:root[data-theme="espresso"], :root[data-theme="night"] { --tile-hi: rgba(255, 255, 255, 0.05); --tile-lo: rgba(0, 0, 0, 0.6); }
 
 html,
 body {
-  background: #0f172a;
-  color: #f1f5f9;
+  background: rgb(var(--page));
+  color: rgb(var(--slate-100));
 }
 
 body {
-  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  font-family: "Geist", system-ui, sans-serif;
   font-size: 15px;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 400ms ease;
 }
 
 h1,
 h2 {
   text-wrap: balance;
+  letter-spacing: -0.02em;
+}
+
+/* A card: hairline edge and a 1px top highlight, like the homepage's bento tiles */
+.chinh-tile {
+  border-radius: 6px;
+  background: rgb(var(--surface));
+  border: 1px solid rgb(var(--edge));
+  box-shadow: inset 0 1px 0 var(--tile-hi), 0 1px 0 var(--tile-lo);
+}
+
+/* Theme switch: the new palette spreads out in a circle from the swatch that was tapped */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
 }
 
 .chinh-gutter {
@@ -33,7 +94,7 @@ h2 {
   appearance: none;
   height: 6px;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.2);
+  background: rgb(var(--slate-500) / 0.25);
   outline: none;
 }
 .chinh-range::-webkit-slider-thumb {
@@ -41,8 +102,8 @@ h2 {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: var(--cyan);
-  box-shadow: 0 0 12px rgba(34, 211, 238, 0.6);
+  background: rgb(var(--cyan-400));
+  box-shadow: 0 0 0 4px rgb(var(--cyan-400) / 0.18);
   cursor: pointer;
 }
 .chinh-range::-moz-range-thumb {
@@ -50,11 +111,11 @@ h2 {
   height: 20px;
   border: 0;
   border-radius: 50%;
-  background: var(--cyan);
+  background: rgb(var(--cyan-400));
   cursor: pointer;
 }
 .chinh-range:focus-visible {
-  box-shadow: 0 0 0 2px var(--cyan);
+  box-shadow: 0 0 0 2px rgb(var(--cyan-400));
 }
 
 @media (prefers-reduced-motion: reduce) {

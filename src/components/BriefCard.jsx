@@ -3,10 +3,9 @@ import React from "react";
 import { Dumbbell, Moon, Target, Lightbulb, Settings } from "lucide-react";
 import { Card, Eyebrow, GhostButton } from "./ui.jsx";
 import { SESSION_DEFAULTS } from "../engine.js";
+import { tone as themed } from "../theme.js";
 
-const DECISION_TONE = {
-  push: "#22e58b", "as-planned": "#22d3ee", cap: "#facc15", reduce: "#f97316", recover: "#fb5a6e",
-};
+const DECISION_TONE = { push: "#22e58b", "as-planned": "#22d3ee", cap: "#facc15", reduce: "#f97316", recover: "#fb5a6e" };
 
 function Row({ icon: Icon, label, children }) {
   return (
@@ -37,13 +36,13 @@ export function BriefSetupCard({ onOpenSettings }) {
 export default function BriefCard({ brief, archetype, result, onOpenSettings }) {
   const { decision, planned, bedtime, cutoffs, focus, fact } = brief;
   const plannedLabel = planned ? SESSION_DEFAULTS[planned]?.label ?? planned : null;
-  const tone = DECISION_TONE[decision?.decision] ?? "#94a3b8";
+  const tone = themed(DECISION_TONE[decision?.decision] ?? "#94a3b8");
   return (
     <Card className="p-5 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <Eyebrow>Morning brief</Eyebrow>
-          <h2 className="mt-1 font-display text-3xl font-semibold" style={{ color: archetype.color }}>
+          <h2 className="mt-1 font-display text-3xl font-semibold" style={{ color: themed(archetype.color) }}>
             {archetype.label.replace(" DAY", "")} · {result.score}%
           </h2>
           <p className="text-sm text-slate-300">{focus.title}: {focus.action}</p>

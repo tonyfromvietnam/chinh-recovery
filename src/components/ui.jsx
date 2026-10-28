@@ -1,9 +1,10 @@
 /* Shared building blocks for the dashboard and its cards. */
 import React from "react";
 import { Check, X } from "lucide-react";
+import { tone } from "../theme.js";
 
 export const Card = ({ className = "", children }) => (
-  <section className={`rounded-2xl border border-white/[0.07] bg-white/[0.035] backdrop-blur-xl ${className}`}>{children}</section>
+  <section className={`chinh-tile ${className}`}>{children}</section>
 );
 
 export const Eyebrow = ({ children }) => (
@@ -25,8 +26,8 @@ export function MiniRing({ pct, color }) {
   const r = 18, c = 2 * Math.PI * r;
   return (
     <svg viewBox="0 0 44 44" className="h-11 w-11 -rotate-90">
-      <circle cx="22" cy="22" r={r} fill="none" stroke="rgba(148,163,184,0.15)" strokeWidth="5" />
-      <circle cx="22" cy="22" r={r} fill="none" stroke={color} strokeWidth="5" strokeLinecap="round"
+      <circle cx="22" cy="22" r={r} fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth="5" />
+      <circle cx="22" cy="22" r={r} fill="none" stroke={tone(color)} strokeWidth="5" strokeLinecap="round"
         strokeDasharray={c} strokeDashoffset={c * (1 - Math.max(0, Math.min(1, pct)))} style={{ transition: "stroke-dashoffset 500ms" }} />
     </svg>
   );
@@ -36,8 +37,8 @@ export function Checkbox({ checked, onChange, color = "#22e58b", label }) {
   return (
     <button type="button" role="checkbox" aria-checked={checked} aria-label={label} onClick={onChange}
       className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border-2 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
-      style={{ borderColor: checked ? color : "rgba(148,163,184,0.4)", background: checked ? color : "transparent" }}>
-      {checked && <Check size={15} strokeWidth={3.5} color="#0b1220" />}
+      style={{ borderColor: checked ? tone(color) : "rgba(148,163,184,0.5)", background: checked ? tone(color) : "transparent" }}>
+      {checked && <Check size={15} strokeWidth={3.5} color={tone("#0b1220")} />}
     </button>
   );
 }
@@ -47,7 +48,7 @@ export function Modal({ eyebrow, title, onClose, children, labelId = "modal-titl
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/80 backdrop-blur-sm sm:items-center sm:p-4"
       onClick={onClose} role="dialog" aria-modal="true" aria-labelledby={labelId}>
       <div onClick={(e) => e.stopPropagation()}
-        className={`max-h-[92vh] w-full ${wide ? "max-w-2xl" : "max-w-xl"} overflow-y-auto rounded-t-3xl border border-white/10 bg-slate-900 p-5 sm:rounded-3xl sm:p-7`}
+        className={`max-h-[92vh] w-full ${wide ? "max-w-2xl" : "max-w-xl"} overflow-y-auto rounded-t-xl border border-edge bg-surface p-5 shadow-2xl sm:rounded-xl sm:p-7`}
         style={{ paddingBottom: "max(20px, env(safe-area-inset-bottom, 0px))" }}>
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -109,7 +110,7 @@ export function RangeField({ id, label, value, min, max, step = 1, unit = "", on
 
 export const PrimaryButton = ({ children, onClick, type = "button", className = "" }) => (
   <button type={type} onClick={onClick}
-    className={`flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-400 to-cyan-400 py-3 font-semibold text-slate-950 transition hover:brightness-110 focus-visible:ring-2 focus-visible:ring-white ${className}`}>
+    className={`flex w-full items-center justify-center gap-2 rounded-lg bg-cyan-400 py-3 font-semibold text-slate-950 shadow-[0_8px_24px_-12px_rgb(var(--cyan-400))] transition hover:-translate-y-px hover:brightness-110 focus-visible:ring-2 focus-visible:ring-cyan-300 focus-visible:ring-offset-2 focus-visible:ring-offset-page ${className}`}>
     {children}
   </button>
 );
