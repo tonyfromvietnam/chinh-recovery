@@ -26,6 +26,7 @@ export * from "./engine/learning.js";
 export * from "./engine/strap.js";
 export * from "./engine/exercises.js";
 export * from "./engine/ingest.js";
+export * from "./engine/coach.js";
 
 export const SLEEP_TARGET_H = 8;
 export const BASELINE_WINDOW_DAYS = 30;

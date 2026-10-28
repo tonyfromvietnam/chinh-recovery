@@ -329,8 +329,12 @@ export function buildSession({ dayType, archetypeId, decision = null, directives
   const powerItems = power.filter(Boolean).map((ex) => ({ id: ex.id, pattern: ex.pattern, rung: ex.rung, name: ex.name, sets: ex.sets, reps: ex.reps, unit: ex.unit, side: ex.side, effort: "fast, stop when reps slow" }));
   if (!legsReady) why.push("leg power stays at the glute-bridge rung until the ankle is ready (balance rung 4, ankle/hip < 3)");
 
+  // The facts behind today's rules, so the AI trainer (M8.4) is checked against exactly the same limits
+  const context = { equipment, sessionMinutes, ankleMax, flare, soreLegs, footballTomorrow: !!footballTomorrow, legsReady, high, failure,
+    powerCount: high ? 2 : 1 };
+
   // Keep inside the time budget: take a round off the longest pair until it fits
-  const session = { type, label, recovery: false, power: powerItems, blocks, sessionMinutes, why: why.join("; ") + "." };
+  const session = { type, label, recovery: false, power: powerItems, blocks, sessionMinutes, why: why.join("; ") + ".", context };
   while (estimateMinutes(session) > sessionMinutes) {
     const b = [...session.blocks].sort((x, y) => y.rounds - x.rounds)[0];
     if (!b || b.rounds <= 1) break;

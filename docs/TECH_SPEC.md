@@ -578,6 +578,8 @@ export function hrLoad(minutes)                   // Edwards TRIMP: Σ minutes_z
 - **Tests:** plan/actual matching, the counts.
 
 ### M8.4 AI trainer (Claude)
+
+**Status:** built (`src/engine/coach.js`, `api/coach.js`, `claim_coach_request` in `supabase/schema.sql`, the AI plan button on `TrainingCard`, `tests/coach.test.js`). The Sunday weekly note waits for M8.3.
 - **Server function:** `api/coach.js` on Vercel. `ANTHROPIC_API_KEY`, `COACH_MODEL` and `OWNER_EMAIL` are Vercel environment variables, never in the browser.
 - **Who can call it:** the function checks the Supabase session (asks Supabase Auth for the user behind the token) and answers only when that user's email matches `OWNER_EMAIL`, before any call to Claude. Sign-ups also stay off in Supabase (step 6 of `SUPABASE_SETUP.md`). Both, because the key costs money.
 - **Daily limit (Supabase):** one plan a day plus 3 regenerations, kept in a new table `coach_usage (user_id, date, plans, regenerations)` with RLS (users read their own rows only). Counting goes through a `security definer` function `claim_coach_request(kind text) returns boolean` that atomically increments today's row (Europe/London date) and returns false once the limit is reached, so the Vercel function needs only the caller's token, not the service-role key. The function calls it before Claude and returns 429 "Today's plans are used up" when it's false. SQL goes in `supabase/schema.sql`, plus a line in `docs/SUPABASE_SETUP.md`.
