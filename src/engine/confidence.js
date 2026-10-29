@@ -14,7 +14,8 @@ function notesFor(day) {
     : [];
 }
 
-export const OVERRIDE_LABELS = { ill: "ill", stress: "high stress" };
+// "rest" is what public viewers see instead of ill / high stress (api/_public.js keeps the reason private)
+export const OVERRIDE_LABELS = { ill: "ill", stress: "high stress", rest: "a rest day" };
 
 export function dataConfidence(day) {
   if (!day) return { level: "low", reasons: ["No data"], notes: [] };

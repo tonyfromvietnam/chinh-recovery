@@ -523,9 +523,9 @@ function WeeklyReviewCard({ review }) {
 /* =========================================================================
    Cloud sync
    ========================================================================= */
-function SyncChip({ cloud, signedIn, onClick }) {
+function SyncChip({ cloud, signedIn, viewer = false, onClick }) {
   if (cloud.state === "off") return null;
-  const label = !signedIn ? "Sync across devices"
+  const label = !signedIn ? (viewer ? "Owner sign-in" : "Sync across devices")
     : cloud.state === "syncing" ? "Syncing…"
     : cloud.state === "error" ? "Sync error"
     : cloud.at ? `Cloud · ${new Date(cloud.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : "Cloud";
@@ -740,6 +740,10 @@ export default function CHINHDashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [restedPrompt, setRestedPrompt] = useState(false);
   const [session, setSession] = useState(null);
+  const [authReady, setAuthReady] = useState(!supabase);
+  // Public read-only view (api/public): a visitor who isn't signed in and has no data of their own sees the
+  // owner's dashboard. Nothing they see is saved in their browser, and nothing they do is written anywhere.
+  const [viewer, setViewer] = useState(null);
   const [cloud, setCloud] = useState({ state: supabase ? "idle" : "off" });
   const syncedRef = useRef(null); // date → JSON of each day as the cloud last confirmed it
   const profileSyncedRef = useRef(null); // JSON of the profile as the cloud last confirmed it
@@ -752,7 +756,8 @@ export default function CHINHDashboard() {
   }, []);
 
   const todayDay = useMemo(() => history.find((h) => h.date === today) || null, [history, today]);
-  const learned = useMemo(() => learnProfile(history, today), [history, today]);
+  // Visitors get the owner's sleep need from the server (it's learned from bed/wake times they never receive)
+  const learned = useMemo(() => ({ ...learnProfile(history, today), ...(viewer?.learned || {}) }), [history, today, viewer]);
   const fullProfile = useMemo(() => (profile ? { ...profile, learned } : null), [profile, learned]);
   const dayCheckin = useMemo(() => ({ ...checkin, ...overnightOf(todayDay), override: todayDay?.override ?? null }), [checkin, todayDay]);
 
@@ -801,7 +806,7 @@ export default function CHINHDashboard() {
     for (const k of ["weightKg", "weightLog", "sweatRateLph", "injuredSide", "footballKeyword", "experiment", "location"]) delete next[k];
     setProfileState(next);
   };
-  useEffect(() => { if (profile) save(KEYS.profile, profile); }, [profile]);
+  useEffect(() => { if (profile && !viewer) save(KEYS.profile, profile); }, [profile, viewer]);
 
   // Every scoring is kept as a decision record (inputs, baselines, parts, directions) when signed in
   const logDecision = (plan, used, now) => {
@@ -861,9 +866,9 @@ export default function CHINHDashboard() {
     if ((next.sleepQualityRatedOn ?? next.ratedOn) !== today) setRestedPrompt(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => save(KEYS.checkin, checkin), [checkin]);
-  useEffect(() => save(KEYS.done(today), done), [done, today]);
-  useEffect(() => save(KEYS.history, history), [history]);
+  useEffect(() => { if (!viewer) save(KEYS.checkin, checkin); }, [checkin, viewer]);
+  useEffect(() => { if (!viewer) save(KEYS.done(today), done); }, [done, today, viewer]);
+  useEffect(() => { if (!viewer) save(KEYS.history, history); }, [history, viewer]);
 
   const rateRested = (q) => {
     commitCheckin({ ...checkin, sleepQuality: q, sleepQualityRatedOn: today });
@@ -873,6 +878,7 @@ export default function CHINHDashboard() {
   // Ticking a block also records today's plan completion for the weekly review. Written here, on the tap,
   // rather than in an effect, so another device with no ticks can never overwrite these counts with zeros.
   const toggle = (id) => {
+    if (viewer) return;
     const next = { ...done, [id]: !done[id] };
     setDone(next);
     // Balance and calf ticks count towards their ladders (M8.2)
@@ -888,10 +894,38 @@ export default function CHINHDashboard() {
   // ---- Cloud sync: pull on sign-in and whenever the app comes back to the foreground, push what changed
   useEffect(() => {
     if (!supabase) return;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setAuthReady(true); });
     const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => data.subscription.unsubscribe();
   }, []);
+
+  // Visitors: load the owner's public data, and refresh it whenever the tab comes back into view
+  useEffect(() => {
+    if (!authReady || session || viewer !== null || history.length) return; // signed in, or this browser has its own data
+    let cancelled = false;
+    const fetchPublic = () => fetch(`${API_BASE}/public`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        if (cancelled || !Array.isArray(json?.days)) return;
+        setViewer({ served: json.served, learned: json.learned || null });
+        setHistory(json.days);
+        setProfileState(json.profile ?? null);
+      })
+      .catch(() => { /* public view off or offline: show the normal empty dashboard */ });
+    fetchPublic();
+    const onVisible = () => document.visibilityState === "visible" && fetchPublic();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => { cancelled = true; document.removeEventListener("visibilitychange", onVisible); };
+  }, [authReady, session]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The owner signs in on a browser that was showing the public view: drop it before the real data is pulled,
+  // so the filtered copy can never be merged into, or pushed over, the owner's records
+  useEffect(() => {
+    if (!session || !viewer) return;
+    setViewer(null);
+    setHistory(load(KEYS.history, []));
+    setProfileState(load(KEYS.profile, null));
+  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const pull = useCallback(async () => {
     if (!supabase || !session) return;
@@ -1026,13 +1060,14 @@ export default function CHINHDashboard() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <ThemeSwitch />
-            <SyncChip cloud={cloud} signedIn={!!session} onClick={() => setSyncOpen(true)} />
+            <SyncChip cloud={cloud} signedIn={!!session} viewer={!!viewer} onClick={() => setSyncOpen(true)} />
             <span className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-[11px] ${syncedToday ? "bg-emerald-400/10 text-emerald-300" : "bg-white/5 text-slate-400"}`}>
               <RefreshCw size={12} />
               {syncedToday
                 ? `Apple Health · ${new Date(healthSync.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`
                 : "Not synced today"}
             </span>
+            {!viewer && <>
             <button onClick={() => setSettingsOpen(true)} aria-label="Settings"
               className="rounded-xl border border-white/10 p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-slate-100 focus-visible:ring-2 focus-visible:ring-cyan-300">
               <Settings size={17} />
@@ -1041,6 +1076,7 @@ export default function CHINHDashboard() {
               className="flex items-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-400/10 px-4 py-2.5 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-400/20 focus-visible:ring-2 focus-visible:ring-cyan-300">
               <ClipboardCheck size={17} /> {checkedInToday ? "Update check-in" : "Check in"}
             </button>
+            </>}
           </div>
         </header>
 
@@ -1063,7 +1099,13 @@ export default function CHINHDashboard() {
           </div>
         )}
 
-        {!checkedInToday && (
+        {viewer && (
+          <p className="mt-4 rounded-xl border border-cyan-400/20 bg-cyan-400/5 px-4 py-2.5 text-sm text-cyan-200" role="status">
+            You're viewing live recovery data, read-only. It updates each morning when the strap syncs. Bed and wake times, and the reason for rest days, are kept private.
+          </p>
+        )}
+
+        {!checkedInToday && !viewer && (
           <p className="mt-4 rounded-xl border border-amber-300/20 bg-amber-300/5 px-4 py-2.5 text-sm text-amber-200">
             {hasCheckins ? "No sync yet today. The plan below uses your last check-in. Run your Health Sync Shortcut to update it." : "No data yet. Run your Health Sync Shortcut, or tap Check in to enter numbers by hand."}
           </p>
@@ -1071,8 +1113,8 @@ export default function CHINHDashboard() {
 
         <div className="mt-6">
           {day.brief
-            ? <BriefCard brief={day.brief} archetype={archetype} result={result} onOpenSettings={() => setSettingsOpen(true)} />
-            : <BriefSetupCard onOpenSettings={() => setSettingsOpen(true)} />}
+            ? <BriefCard brief={day.brief} archetype={archetype} result={result} hideTimes={!!viewer} onOpenSettings={viewer ? undefined : () => setSettingsOpen(true)} />
+            : !viewer && <BriefSetupCard onOpenSettings={() => setSettingsOpen(true)} />}
         </div>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
@@ -1090,8 +1132,8 @@ export default function CHINHDashboard() {
 
         {day.session && (
           <div className="mt-4">
-            <TrainingCard session={coached.session} logged={todayDay?.workout ?? null} onOpenSettings={() => setSettingsOpen(true)}
-              onSaveLog={(w) => setHistory((h) => applyWorkoutLog(h, today, w))}
+            <TrainingCard session={coached.session} logged={todayDay?.workout ?? null} onOpenSettings={viewer ? undefined : () => setSettingsOpen(true)}
+              onSaveLog={(w) => { if (!viewer) setHistory((h) => applyWorkoutLog(h, today, w)); }}
               coach={{ available: !!session, hasPlan: !!todayDay?.coach, busy: coachState.busy,
                 note: coachState.note ?? (coached.failed ? "Standard session: the AI plan didn't pass the checks." : null),
                 onAsk: askCoach }} />
@@ -1113,8 +1155,10 @@ export default function CHINHDashboard() {
         </div>
 
         <p className="mt-6 text-center font-mono text-[11px] text-slate-500">
-          {session
-            ? "Synced to your private database. Only you can read it."
+          {viewer
+            ? "Public, read-only view."
+            : session
+            ? "Synced to your database. Visitors can see it read-only if the public dashboard is on."
             : "Your data stays in this browser on this device. Nothing is uploaded unless you turn on sync."}
         </p>
       </div>
@@ -1122,11 +1166,11 @@ export default function CHINHDashboard() {
       {syncOpen && supabase && (
         <SyncModal session={session} cloud={cloud} onClose={() => setSyncOpen(false)} onSyncNow={pull} onSignOut={signOut} />
       )}
-      {modalOpen && (
+      {modalOpen && !viewer && (
         <CheckInModal initial={dayCheckin} synced={healthSync} history={history} today={today} profile={fullProfile}
           onClose={() => setModalOpen(false)} onSubmit={handleSubmit} />
       )}
-      {settingsOpen && (
+      {settingsOpen && !viewer && (
         <SettingsModal profile={profile} footballRecoveryH={learned.footballRecoveryH} onClose={() => setSettingsOpen(false)}
           onSave={(p) => { setProfile({ ...(profile || {}), ...p }); setSettingsOpen(false); }} />
       )}

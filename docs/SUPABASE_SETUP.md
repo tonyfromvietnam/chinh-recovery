@@ -99,6 +99,20 @@ The **New plan** button on the training card asks Claude to pick today's exercis
 
 Redeploy. Check https://chinh-recovery.vercel.app/api/stats shows the summary; the homepage picks it up within about 15 minutes.
 
+## 10. Public read-only dashboard (optional)
+
+Anyone who opens www.duychinhdinh.com/chinh-recovery without signing in sees your dashboard, read-only: score, directions, plan, charts and history. Only you, signed in, can check in, log sessions or change settings. Visitors' browsers save nothing.
+
+Kept private, removed on the server before anything is sent (`api/_public.js`): **bed and wake times** (on every day and in your settings) and **the reason for a rest day** (ill or high stress shows as "rest day"). Your sleep need, which is learned from bed and wake times, is sent as a single number so visitors see the same score as you. Decision records are never served.
+
+It reuses the section 7 variables. Turn it on in Vercel → `chinh-recovery` → Environment Variables (type **Config**, Production):
+
+| Name | Value |
+|---|---|
+| `PUBLIC_DASHBOARD` | `on` (remove it, then redeploy, to make the dashboard private again) |
+
+Redeploy, then open the address in a private window: you should see the blue "read-only" banner and your data.
+
 ## How clashes are settled
 Each day carries the time it was last changed. If phone and desktop both changed the same day, the newer change wins, and fields only one side has are kept. A real check-in always beats a backfilled day. Signing out keeps the copy on that device.
 

@@ -7,7 +7,7 @@ import { shiftKey } from "./util.js";
 import { planDay, upsertDay, applyYesterday, learnProfile } from "../engine.js";
 
 /* Bump when scoring, directions or the plan change, so every stored decision says which rules made it */
-export const ENGINE_VERSION = "2026-10-26";
+export const ENGINE_VERSION = "2026-10-29";
 
 /* Example values used until the first real check-in */
 export const DEFAULT_CHECKIN = {
