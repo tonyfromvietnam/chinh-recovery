@@ -33,7 +33,8 @@ export function BriefSetupCard({ onOpenSettings }) {
   );
 }
 
-export default function BriefCard({ brief, archetype, result, onOpenSettings }) {
+/* hideTimes: the public view never shows bedtime targets or cut-offs (the owner keeps sleep timing private) */
+export default function BriefCard({ brief, archetype, result, onOpenSettings, hideTimes = false }) {
   const { decision, planned, bedtime, cutoffs, focus, fact } = brief;
   const plannedLabel = planned ? SESSION_DEFAULTS[planned]?.label ?? planned : null;
   const tone = themed(DECISION_TONE[decision?.decision] ?? "#94a3b8");
@@ -45,13 +46,15 @@ export default function BriefCard({ brief, archetype, result, onOpenSettings }) 
           <h2 className="mt-1 font-display text-3xl font-semibold" style={{ color: themed(archetype.color) }}>
             {archetype.label.replace(" DAY", "")} · {result.score}%
           </h2>
-          <p className="text-sm text-slate-300">{focus.title}: {focus.action}</p>
+          {!hideTimes && <p className="text-sm text-slate-300">{focus.title}: {focus.action}</p>}
         </div>
-        <div className="flex gap-2">
-          <button onClick={onOpenSettings} aria-label="Settings" className="rounded-lg border border-white/10 p-2 text-slate-400 hover:bg-white/5 hover:text-slate-100">
-            <Settings size={16} />
-          </button>
-        </div>
+        {onOpenSettings && (
+          <div className="flex gap-2">
+            <button onClick={onOpenSettings} aria-label="Settings" className="rounded-lg border border-white/10 p-2 text-slate-400 hover:bg-white/5 hover:text-slate-100">
+              <Settings size={16} />
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="mt-4 grid gap-x-8 lg:grid-cols-2">
@@ -67,7 +70,7 @@ export default function BriefCard({ brief, archetype, result, onOpenSettings }) 
             )}
           </Row>
         </div>
-        <div>
+        {!hideTimes && <div>
           <Row icon={Moon} label="Tonight">
             <p>In bed by <span className="font-display text-xl font-semibold tabular-nums text-slate-100">{bedtime.time}</span>
               {brief.sleepNeedLearned && <span className="ml-2 rounded bg-emerald-400/10 px-1.5 font-mono text-[10px] uppercase text-emerald-300">your sleep need</span>}</p>
@@ -83,7 +86,7 @@ export default function BriefCard({ brief, archetype, result, onOpenSettings }) 
             <p>{focus.action}</p>
             <p className="font-mono text-[11px] text-slate-500">{focus.why}</p>
           </Row>
-        </div>
+        </div>}
       </div>
 
       <div className="mt-3 flex gap-3 rounded-xl border border-white/[0.06] bg-slate-900/40 p-3">

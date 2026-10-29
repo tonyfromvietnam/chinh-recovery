@@ -563,7 +563,7 @@ export function planDay({ checkin, history, today, profile = null }) {
   if (override) {
     directives = directives.filter((d) => d.id !== "push");
     directives.unshift({ id: "override", level: "stop",
-      title: override === "ill" ? "Recover: you're unwell" : "Recover: high-stress day",
+      title: { ill: "Recover: you're unwell", stress: "Recover: high-stress day" }[override] ?? "Recover: rest day",
       why: `You marked today as ${OVERRIDE_LABELS[override] || override}. It's left out of your baselines.`,
       action: "Walk, mobility, breathwork and an early night. No training." });
   }
