@@ -124,3 +124,17 @@ h2 {
     animation: none !important;
   }
 }
+
+/* Signature logo (public/logo.png is only a mask, so it takes the current text colour) */
+.signature {
+  display: block;
+  aspect-ratio: 903 / 306;
+  background: currentColor;
+  -webkit-mask: url("/logo.png") center / contain no-repeat;
+  mask: url("/logo.png") center / contain no-repeat;
+}
+
+/* Moving between the homepage and CHINH (same domain) cross-fades instead of flashing */
+@view-transition {
+  navigation: auto;
+}

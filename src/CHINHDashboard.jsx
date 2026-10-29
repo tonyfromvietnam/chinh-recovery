@@ -25,7 +25,7 @@ import SettingsModal from "./components/SettingsModal.jsx";
 import InsightsCard from "./components/InsightsCard.jsx";
 import HrLoadCard from "./components/HrLoadCard.jsx";
 import TrainingCard from "./components/TrainingCard.jsx";
-import ThemeSwitch from "./components/ThemeSwitch.jsx";
+import Ribbon from "./components/Ribbon.jsx";
 
 /* =========================================================================
    Storage (on this device only — wrapped so private mode never crashes)
@@ -1046,6 +1046,7 @@ export default function CHINHDashboard() {
 
   return (
     <div className="min-h-screen bg-page text-slate-100">
+      <Ribbon active="health" />
 
       <div className="chinh-gutter relative mx-auto max-w-6xl py-6 sm:py-10">
         <header className="flex flex-wrap items-center justify-between gap-4">
@@ -1059,7 +1060,6 @@ export default function CHINHDashboard() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <ThemeSwitch />
             <SyncChip cloud={cloud} signedIn={!!session} viewer={!!viewer} onClick={() => setSyncOpen(true)} />
             <span className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 font-mono text-[11px] ${syncedToday ? "bg-emerald-400/10 text-emerald-300" : "bg-white/5 text-slate-400"}`}>
               <RefreshCw size={12} />
